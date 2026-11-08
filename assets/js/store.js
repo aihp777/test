@@ -1,7 +1,7 @@
 // =============================================================
 //  데이터 계층: 데모(localStorage) / 운영(Supabase) 공통 인터페이스
 // =============================================================
-import { CONFIG, IS_DEMO } from "./config.js";
+import { CONFIG, IS_DEMO, NATIONWIDE, covers } from "./config.js";
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 const now = () => new Date().toISOString();
@@ -10,7 +10,7 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v1";
+const DB_KEY = "wg_platform_v2";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
@@ -24,7 +24,7 @@ function seed() {
     users: [admin, cust, v1u, v2u, v3u],
     vendors: [
       { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "000-00-00000", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
-        categories: ["시설경비", "신변보호", "혼잡·교통유도", "이주관리·범죄예방", "행정대집행지원", "청소대행"], regions: ["서울", "경기", "인천", "대전", "충북"],
+        categories: ["시설경비", "신변보호", "혼잡·교통유도", "이주관리·범죄예방", "행정대집행지원", "청소대행"], regions: [NATIONWIDE],
         intro: "경찰청 허가법인. 재개발·재건축 이주관리, 대형 행사 경비, VIP 신변보호 다수 실적 보유.", license_info: "경비업 허가증, 분사기 허가증", status: "approved", rating: 4.9, review_count: 128, created_at: t(300) },
       { id: "v-2", owner_id: "u-v2", company: "한빛시큐리티(데모)", ceo: "이대표", biz_no: "000-00-00001", phone: "02-000-0000", email: "vendor2@demo.com", address: "서울특별시",
         categories: ["시설경비", "혼잡·교통유도"], regions: ["서울", "경기"], intro: "공연·행사 전문 경비업체 (데모 데이터)", license_info: "경비업 허가증", status: "approved", rating: 4.6, review_count: 41, created_at: t(120) },
@@ -79,7 +79,7 @@ const demo = {
     return load().vendors.filter((v) =>
       (!status || v.status === status) &&
       (!category || v.categories.includes(category)) &&
-      (!region || v.regions.includes(region)) &&
+      covers(v.regions, region) &&
       (!q || (v.company + v.intro).includes(q))
     ).sort((a, b) => b.rating - a.rating);
   },
@@ -112,7 +112,7 @@ const demo = {
     const quoted = new Set(d.quotes.filter((q) => q.vendor_id === v.id).map((q) => q.request_id));
     return d.requests.filter((r) =>
       r.target_vendor_id === v.id || quoted.has(r.id) ||
-      (r.status === "open" && !r.target_vendor_id && v.categories.includes(r.category) && v.regions.includes(r.region))
+      (r.status === "open" && !r.target_vendor_id && v.categories.includes(r.category) && covers(v.regions, r.region))
     ).sort(byNewest);
   },
   async listAllRequests() { return load().requests.sort(byNewest); },
@@ -212,7 +212,7 @@ const supa = {
     const c = await client(); let s = c.from("vendors").select("*");
     if (status) s = s.eq("status", status);
     if (category) s = s.contains("categories", [category]);
-    if (region) s = s.contains("regions", [region]);
+    if (region && region !== NATIONWIDE) s = s.overlaps("regions", [region, NATIONWIDE]);
     if (q) s = s.or(`company.ilike.%${q}%,intro.ilike.%${q}%`);
     return ok(await s.order("rating", { ascending: false }));
   },
@@ -236,7 +236,9 @@ const supa = {
   async listMyRequests() { const c = await client(); const me = await this.currentUser(); return ok(await c.from("requests").select("*").eq("customer_id", me.id).order("created_at", { ascending: false })); },
   async listMatchedRequests() {
     const c = await client(); const v = await this.myVendor(); if (!v || v.status !== "approved") return [];
-    const open = ok(await c.from("requests").select("*").eq("status", "open").is("target_vendor_id", null).in("category", v.categories).in("region", v.regions));
+    let oq = c.from("requests").select("*").eq("status", "open").is("target_vendor_id", null).in("category", v.categories);
+    if (!v.regions.includes(NATIONWIDE)) oq = oq.in("region", [...v.regions, NATIONWIDE]);
+    const open = ok(await oq);
     const direct = ok(await c.from("requests").select("*").eq("target_vendor_id", v.id));
     const qids = ok(await c.from("quotes").select("request_id").eq("vendor_id", v.id)).map((x) => x.request_id);
     const quoted = qids.length ? ok(await c.from("requests").select("*").in("id", qids)) : [];

@@ -12,6 +12,7 @@ export const options = (list, sel = "", placeholder) =>
   (placeholder ? `<option value="">${placeholder}</option>` : "") + list.map((x) => `<option ${x === sel ? "selected" : ""}>${esc(x)}</option>`).join("");
 export const badge = (label, tone = "") => `<span class="badge ${tone}">${esc(label)}</span>`;
 export { CATEGORIES, REGIONS, store };
+export { regionLabel } from "./config.js";
 
 export function toast(msg, tone = "") {
   let el = $("#toast");

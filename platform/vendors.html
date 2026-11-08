@@ -22,7 +22,7 @@
   </div>
 </main>
 <script type="module">
-import { renderHeader, $, esc, options, qs, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
+import { renderHeader, $, esc, options, qs, store, CATEGORIES, REGIONS , regionLabel } from "/assets/js/ui.js";
 await renderHeader();
 $("#cat").innerHTML = options(CATEGORIES, qs("category") || "", "전체 분야");
 $("#reg").innerHTML = options(REGIONS, qs("region") || "", "전체 지역");
@@ -34,7 +34,7 @@ async function load() {
       <div class="flex between"><h3>${esc(v.company)}</h3><span class="star">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0})</small></span></div>
       <div class="tags">${v.categories.map((c) => `<span class="badge teal">${esc(c)}</span>`).join("")}</div>
       <p>${esc(v.intro)}</p>
-      <small class="muted">지역: ${esc(v.regions.join(", "))}</small>
+      <small class="muted">지역: ${esc(regionLabel(v.regions))}</small>
       <div class="flex"><a class="p-btn p-btn-line p-btn-sm" href="/platform/vendor?id=${v.id}">상세 보기</a><a class="p-btn p-btn-sm" href="/platform/request?vendor=${v.id}">견적 요청</a></div>
     </div>`).join("") || `<div class="empty" style="grid-column:1/-1">조건에 맞는 업체가 없습니다. <a href="/platform/request" style="color:var(--blue)">공개 견적 요청</a>을 남겨보세요.</div>`;
 }

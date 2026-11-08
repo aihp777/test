@@ -15,7 +15,7 @@
       <div id="target" class="mb" hidden></div>
       <div class="row2">
         <div class="field"><label>서비스 분야<em>*</em></label><select name="category" id="cat" required></select></div>
-        <div class="field"><label>지역<em>*</em></label><select name="region" id="reg" required></select></div>
+        <div class="field"><label>지역<em>*</em></label><select name="region" id="reg" required></select><small>여러 지역에 걸친 업무는 "전국"을 선택하고 상세 내용에 지역을 적어주세요.</small></div>
       </div>
       <div class="field"><label>제목<em>*</em></label><input name="title" required maxlength="80" placeholder="예) 아파트 단지 야간 시설경비 2명"></div>
       <div class="row2">
@@ -30,10 +30,14 @@
 </main>
 <script type="module">
 import { renderHeader, requireLogin, $, esc, options, qs, toast, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
+import { NATIONWIDE } from "/assets/js/config.js";
 await renderHeader();
 await requireLogin();
+const regionOptions = (list, sel) => `<option value="">선택</option>` +
+  (list.includes(NATIONWIDE) || list === REGIONS ? `<option value="${NATIONWIDE}" ${sel === NATIONWIDE ? "selected" : ""}>전국 (지역 무관 · 여러 지역)</option>` : "") +
+  options((list.includes(NATIONWIDE) ? REGIONS : list).filter((r) => r !== NATIONWIDE), sel);
 $("#cat").innerHTML = options(CATEGORIES, qs("category") || "", "선택");
-$("#reg").innerHTML = options(REGIONS, qs("region") || "", "선택");
+$("#reg").innerHTML = regionOptions(REGIONS, qs("region") || "");
 $("#dt").min = new Date().toISOString().slice(0, 10);
 const vid = qs("vendor");
 let vendor = null;
@@ -43,7 +47,7 @@ if (vid) {
     $("#target").hidden = false;
     $("#target").innerHTML = `<span class="badge navy">지정 업체 요청</span> <b>${esc(vendor.company)}</b> <span class="muted">에게만 요청이 전달됩니다.</span>`;
     $("#cat").innerHTML = options(vendor.categories, qs("category") || "", "선택");
-    $("#reg").innerHTML = options(vendor.regions, qs("region") || "", "선택");
+    $("#reg").innerHTML = regionOptions(vendor.regions, qs("region") || "");
   }
 }
 $("#form").onsubmit = async (e) => {

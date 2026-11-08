@@ -58,7 +58,7 @@
   </section>
 </main>
 <script type="module">
-import { renderHeader, $, esc, options, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
+import { renderHeader, $, esc, options, store, CATEGORIES, REGIONS , regionLabel } from "/assets/js/ui.js";
 await renderHeader();
 const icons = ["🏢", "🛡️", "🚦", "🏗️", "⚖️", "🧹"];
 $("#qCat").innerHTML = options(CATEGORIES, "", "서비스 선택");
@@ -71,7 +71,7 @@ $("#featured").innerHTML = vs.map((v) => `
     <div class="flex between"><h3>${esc(v.company)}</h3><span class="star">★ ${v.rating || "-"}</span></div>
     <div class="tags">${v.categories.slice(0, 3).map((c) => `<span class="badge teal">${esc(c)}</span>`).join("")}</div>
     <p>${esc(v.intro)}</p>
-    <small class="muted">서비스 지역: ${esc(v.regions.join(", "))}</small>
+    <small class="muted">서비스 지역: ${esc(regionLabel(v.regions))}</small>
   </a>`).join("") || `<div class="empty">등록된 업체가 없습니다.</div>`;
 </script>
 </body>

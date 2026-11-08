@@ -22,7 +22,7 @@
   </div>
 </main>
 <script type="module">
-import { renderHeader, requireLogin, $, $$, esc, won, date, datetime, badge, toast, store } from "/assets/js/ui.js";
+import { renderHeader, requireLogin, $, $$, esc, won, date, datetime, badge, toast, store , regionLabel } from "/assets/js/ui.js";
 import { REQUEST_STATUS, VENDOR_STATUS } from "/assets/js/config.js";
 await renderHeader();
 await requireLogin(["admin"]);
@@ -42,7 +42,7 @@ async function vendorsTab() {
   $("#view").innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>업체명</th><th>대표</th><th>사업자번호</th><th>분야</th><th>지역</th><th>허가</th><th>상태</th><th>관리</th></tr></thead><tbody>
   ${all.map((v) => `<tr>
     <td><b>${esc(v.company)}</b><br><small class="muted">${esc(v.phone)} · ${esc(v.email)}</small></td><td>${esc(v.ceo)}</td><td>${esc(v.biz_no)}</td>
-    <td style="max-width:200px">${esc(v.categories.join(", "))}</td><td style="max-width:160px">${esc(v.regions.join(", "))}</td><td>${esc(v.license_info || "-")}</td>
+    <td style="max-width:200px">${esc(v.categories.join(", "))}</td><td style="max-width:160px">${esc(regionLabel(v.regions))}</td><td>${esc(v.license_info || "-")}</td>
     <td>${badge(VENDOR_STATUS[v.status], tone[v.status])}</td>
     <td class="flex" style="flex-wrap:nowrap">${v.status !== "approved" ? `<button class="p-btn p-btn-sm" data-s="approved" data-id="${v.id}">승인</button>` : ""}${v.status !== "rejected" ? `<button class="p-btn p-btn-bad p-btn-sm" data-s="rejected" data-id="${v.id}">${v.status === "approved" ? "정지" : "반려"}</button>` : ""}</td>
   </tr>`).join("") || `<tr><td colspan="8" class="empty">등록된 업체가 없습니다.</td></tr>`}</tbody></table></div>`;

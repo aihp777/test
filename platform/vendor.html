@@ -10,7 +10,7 @@
 <body>
 <main><div class="p-container" id="root" style="padding-top:40px"></div></main>
 <script type="module">
-import { renderHeader, $, esc, qs, store } from "/assets/js/ui.js";
+import { renderHeader, $, esc, qs, store , regionLabel } from "/assets/js/ui.js";
 await renderHeader();
 const v = await store.getVendor(qs("id"));
 if (!v || v.status !== "approved") {
@@ -29,7 +29,7 @@ if (!v || v.status !== "approved") {
         <h2>업체 정보</h2>
         <table class="tbl">
           <tr><th style="width:140px">대표자</th><td>${esc(v.ceo)}</td></tr>
-          <tr><th>서비스 지역</th><td>${esc(v.regions.join(", "))}</td></tr>
+          <tr><th>서비스 지역</th><td>${esc(regionLabel(v.regions))}</td></tr>
           <tr><th>보유 허가</th><td>${esc(v.license_info || "-")}</td></tr>
           <tr><th>주소</th><td>${esc(v.address || "-")}</td></tr>
         </table>

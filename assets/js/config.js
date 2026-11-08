@@ -28,6 +28,21 @@ export const REGIONS = [
   "전북", "전남", "광주", "경북", "경남", "대구", "울산", "부산", "제주",
 ];
 
+// 전국 / 권역 단위 운영
+export const NATIONWIDE = "전국";
+export const REGION_GROUPS = {
+  "수도권": ["서울", "경기", "인천"],
+  "강원권": ["강원"],
+  "충청권": ["대전", "세종", "충북", "충남"],
+  "호남권": ["광주", "전북", "전남"],
+  "영남권": ["부산", "대구", "울산", "경북", "경남"],
+  "제주권": ["제주"],
+};
+// 업체 서비스 지역(vendorRegions)이 요청 지역(region)을 커버하는지
+export const covers = (vendorRegions = [], region) =>
+  !region || region === NATIONWIDE || vendorRegions.includes(NATIONWIDE) || vendorRegions.includes(region);
+export const regionLabel = (regions = []) => (regions.includes(NATIONWIDE) ? "전국" : regions.join(", "));
+
 export const REQUEST_STATUS = {
   open: "견적 모집중",
   matched: "업체 선정",

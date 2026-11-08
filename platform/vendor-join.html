@@ -31,6 +31,8 @@
       <h2 class="mt">서비스 분야<em style="color:var(--bad)">*</em></h2>
       <div class="chips mb" id="cats"></div>
       <h2>서비스 지역<em style="color:var(--bad)">*</em></h2>
+      <div class="chips" style="margin-bottom:10px"><label><input type="checkbox" id="nation" name="regions" value="전국"><span>전국 (모든 지역 요청 받기)</span></label></div>
+      <div class="flex" id="groups" style="margin-bottom:10px"></div>
       <div class="chips mb" id="regs"></div>
 
       <div class="field"><label>업체 소개<em>*</em></label><textarea name="intro" required placeholder="주요 실적, 보유 인력, 강점 등을 소개해 주세요."></textarea></div>
@@ -40,12 +42,20 @@
 </main>
 <script type="module">
 import { renderHeader, requireLogin, $, $$, esc, badge, toast, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
-import { VENDOR_STATUS } from "/assets/js/config.js";
+import { VENDOR_STATUS, REGION_GROUPS, NATIONWIDE } from "/assets/js/config.js";
 await renderHeader();
 await requireLogin();
 const chip = (name, v) => `<label><input type="checkbox" name="${name}" value="${esc(v)}"><span>${esc(v)}</span></label>`;
 $("#cats").innerHTML = CATEGORIES.map((c) => chip("categories", c)).join("");
 $("#regs").innerHTML = REGIONS.map((r) => chip("regions", r)).join("");
+$("#groups").innerHTML = Object.keys(REGION_GROUPS).map((g) => `<button type="button" class="p-btn p-btn-line p-btn-sm" data-g="${g}">+ ${g}</button>`).join("");
+const regInputs = () => $$("#regs input");
+const syncNation = () => { const on = $("#nation").checked; regInputs().forEach((i) => { i.disabled = on; if (on) i.checked = false; }); $$("#groups button").forEach((b) => (b.disabled = on)); };
+$("#nation").onchange = syncNation;
+$$("#groups button").forEach((b) => (b.onclick = () => {
+  const set = REGION_GROUPS[b.dataset.g]; const all = regInputs().filter((i) => set.includes(i.value));
+  const turnOn = !all.every((i) => i.checked); all.forEach((i) => (i.checked = turnOn));
+}));
 
 const mine = await store.myVendor();
 if (mine) {
@@ -55,13 +65,15 @@ if (mine) {
   ["company", "ceo", "biz_no", "phone", "email", "address", "license_info", "intro"].forEach((k) => (f[k].value = mine[k] || ""));
   $$("input[name=categories]").forEach((i) => (i.checked = mine.categories.includes(i.value)));
   $$("input[name=regions]").forEach((i) => (i.checked = mine.regions.includes(i.value)));
+  syncNation();
   $("#submit").textContent = "정보 저장";
 }
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const data = Object.fromEntries(["company", "ceo", "biz_no", "phone", "email", "address", "license_info", "intro"].map((k) => [k, fd.get(k)]));
-  data.categories = fd.getAll("categories"); data.regions = fd.getAll("regions");
+  data.categories = fd.getAll("categories");
+  data.regions = $("#nation").checked ? [NATIONWIDE] : fd.getAll("regions").filter((r) => r !== NATIONWIDE);
   if (!data.categories.length || !data.regions.length) return toast("서비스 분야와 지역을 1개 이상 선택하세요.", "bad");
   try { await store.registerVendor(data); toast("저장되었습니다."); setTimeout(() => (location.href = "/platform/dashboard"), 700); }
   catch (err) { toast(err.message, "bad"); }
