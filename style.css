@@ -32,7 +32,10 @@ a { color: inherit; text-decoration: none; }
 .header.scrolled { background: rgba(255,255,255,.96); box-shadow: 0 2px 20px rgba(11,24,56,.08); backdrop-filter: blur(8px); }
 .header-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 .logo { display: flex; align-items: center; gap: 10px; color: #fff; }
-.logo-mark { width: 36px; height: 36px; }
+.logo-mark { width: 38px; height: auto; }
+.logo-dark { display: none; }
+.header.scrolled .logo-light, .header:has(.nav.open) .logo-light { display: none; }
+.header.scrolled .logo-dark, .header:has(.nav.open) .logo-dark { display: block; }
 .logo-text { display: flex; flex-direction: column; line-height: 1.1; }
 .logo-text strong { font-size: 18px; letter-spacing: .06em; font-weight: 800; }
 .logo-text small { font-size: 11px; opacity: .8; letter-spacing: .1em; }
