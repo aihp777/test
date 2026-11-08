@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업체 정보 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+</head>
+<body>
+<main><div class="p-container" id="root" style="padding-top:40px"></div></main>
+<script type="module">
+import { renderHeader, $, esc, qs, store } from "/assets/js/ui.js";
+await renderHeader();
+const v = await store.getVendor(qs("id"));
+if (!v || v.status !== "approved") {
+  $("#root").innerHTML = `<div class="empty">업체 정보를 찾을 수 없습니다.</div>`;
+} else {
+  document.title = v.company + " | 와이드가드 매칭";
+  $("#root").innerHTML = `
+  <div class="split">
+    <div>
+      <div class="card">
+        <div class="flex between"><h1 style="color:var(--navy);font-size:28px">${esc(v.company)}</h1><span class="star" style="font-size:18px">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0}건)</small></span></div>
+        <div class="flex mt">${v.categories.map((c) => `<span class="badge teal">${esc(c)}</span>`).join("")}</div>
+        <p class="mt" style="white-space:pre-wrap">${esc(v.intro)}</p>
+      </div>
+      <div class="card">
+        <h2>업체 정보</h2>
+        <table class="tbl">
+          <tr><th style="width:140px">대표자</th><td>${esc(v.ceo)}</td></tr>
+          <tr><th>서비스 지역</th><td>${esc(v.regions.join(", "))}</td></tr>
+          <tr><th>보유 허가</th><td>${esc(v.license_info || "-")}</td></tr>
+          <tr><th>주소</th><td>${esc(v.address || "-")}</td></tr>
+        </table>
+        <p class="muted mt" style="font-size:13px">연락처는 견적 요청 후 상담 메시지를 통해 안내됩니다.</p>
+      </div>
+    </div>
+    <div class="card" style="position:sticky;top:90px">
+      <h2>이 업체에 견적 요청</h2>
+      <p class="muted mb">요청 내용이 ${esc(v.company)}에게만 전달됩니다.</p>
+      <a class="p-btn" style="width:100%" href="/platform/request?vendor=${v.id}">견적 요청하기</a>
+      <a class="p-btn p-btn-line mt" style="width:100%" href="/platform/vendors">다른 업체 보기</a>
+    </div>
+  </div>`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>로그인 / 회원가입 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+</head>
+<body>
+<main>
+  <div class="p-container" style="max-width:480px;padding:50px 0">
+    <div class="card">
+      <div class="tabs"><button class="on" data-t="in">로그인</button><button data-t="up">회원가입</button></div>
+
+      <form id="inForm">
+        <div class="field"><label>이메일</label><input type="email" name="email" required autocomplete="email"></div>
+        <div class="field"><label>비밀번호</label><input type="password" name="password" required autocomplete="current-password"></div>
+        <button class="p-btn" style="width:100%">로그인</button>
+      </form>
+
+      <form id="upForm" hidden>
+        <div class="field"><label>회원 유형</label>
+          <div class="chips">
+            <label><input type="radio" name="role" value="customer" checked><span>고객 (견적 요청)</span></label>
+            <label><input type="radio" name="role" value="vendor"><span>업체 (견적 제공)</span></label>
+          </div>
+        </div>
+        <div class="field"><label>이름 / 담당자명<em>*</em></label><input name="name" required></div>
+        <div class="field"><label>연락처<em>*</em></label><input name="phone" required placeholder="010-0000-0000"></div>
+        <div class="field"><label>이메일<em>*</em></label><input type="email" name="email" required autocomplete="email"></div>
+        <div class="field"><label>비밀번호<em>*</em></label><input type="password" name="password" required minlength="8" autocomplete="new-password"><small>8자 이상</small></div>
+        <label class="flex mb" style="font-size:14px"><input type="checkbox" required style="width:auto"> 이용약관 및 개인정보 수집·이용에 동의합니다.</label>
+        <button class="p-btn" style="width:100%">회원가입</button>
+      </form>
+
+      <div id="demoBox" class="mt" hidden>
+        <p class="muted" style="font-size:13px;margin-bottom:8px">데모 계정으로 바로 체험하기 (비밀번호 demo1234)</p>
+        <div class="flex">
+          <button class="p-btn p-btn-line p-btn-sm" data-demo="customer@demo.com">고객</button>
+          <button class="p-btn p-btn-line p-btn-sm" data-demo="vendor@demo.com">업체(와이드가드)</button>
+          <button class="p-btn p-btn-line p-btn-sm" data-demo="vendor2@demo.com">업체2</button>
+          <button class="p-btn p-btn-line p-btn-sm" data-demo="admin@demo.com">관리자</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { renderHeader, $, $$, toast, qs, store } from "/assets/js/ui.js";
+import { IS_DEMO } from "/assets/js/config.js";
+await renderHeader();
+const next = qs("next") || "/platform/dashboard";
+const go = () => (location.href = next);
+$$(".tabs button").forEach((b) => (b.onclick = () => {
+  $$(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+  $("#inForm").hidden = b.dataset.t !== "in"; $("#upForm").hidden = b.dataset.t !== "up";
+}));
+if (qs("tab") === "up") $$(".tabs button")[1].click();
+$("#inForm").onsubmit = async (e) => {
+  e.preventDefault(); const f = new FormData(e.target);
+  try { await store.signIn(f.get("email"), f.get("password")); go(); } catch (err) { toast(err.message, "bad"); }
+};
+$("#upForm").onsubmit = async (e) => {
+  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+  try {
+    const u = await store.signUp(f);
+    location.href = u.role === "vendor" ? "/platform/vendor-join" : next;
+  } catch (err) { toast(err.message, "bad"); }
+};
+if (IS_DEMO) {
+  $("#demoBox").hidden = false;
+  $$("[data-demo]").forEach((b) => (b.onclick = async () => { await store.signIn(b.dataset.demo, "demo1234"); go(); }));
+}
+</script>
+</body>
+</html>

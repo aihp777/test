@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>마이페이지 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+<style>
+  .dash { display: grid; grid-template-columns: 340px 1fr; gap: 22px; align-items: start; }
+  .dash .list .item { cursor: pointer; }
+  .info { display: grid; grid-template-columns: 110px 1fr; gap: 8px 12px; font-size: 14.5px; margin: 12px 0; }
+  .info dt { color: var(--muted); font-weight: 600; }
+  @media (max-width: 960px) { .dash { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="p-container">
+    <div class="page-head flex between"><div><h1 id="title">마이페이지</h1><p id="subtitle"></p></div><div id="headAct"></div></div>
+    <div id="banner"></div>
+    <div class="tabs" id="tabs"></div>
+    <div id="view"></div>
+  </div>
+</main>
+<script type="module">
+import { renderHeader, requireLogin, $, $$, esc, won, date, datetime, badge, qs, toast, store } from "/assets/js/ui.js";
+import { REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS } from "/assets/js/config.js";
+import { startPayment } from "/assets/js/pay.js";
+
+await renderHeader();
+const me = await requireLogin();
+if (me.role === "admin") { location.href = "/platform/admin"; }
+const vendor = me.role === "vendor" ? await store.myVendor() : null;
+const statusTone = { open: "teal", matched: "navy", paid: "ok", in_progress: "ok", completed: "", canceled: "bad" };
+const rBadge = (s) => badge(REQUEST_STATUS[s] || s, statusTone[s]);
+let pollTimer = null;
+
+// ---------- chat ----------
+async function renderChat(box, request, vendorId, title) {
+  clearInterval(pollTimer);
+  box.innerHTML = `
+    <div class="chat">
+      <div class="chat-head">💬 ${esc(title)}</div>
+      <div class="chat-body" id="chatBody"></div>
+      <form class="chat-form" id="chatForm"><input id="chatInput" placeholder="메시지를 입력하세요" autocomplete="off" maxlength="1000"><button class="p-btn p-btn-sm">전송</button></form>
+    </div>`;
+  const body = $("#chatBody", box);
+  let last = "";
+  const draw = async () => {
+    const ms = await store.listMessages(request.id, vendorId);
+    const sig = ms.length + (ms.at(-1)?.id || "");
+    if (sig === last) return; last = sig;
+    body.innerHTML = ms.map((m) => `<div class="msg ${m.sender_id === me.id ? "me" : ""}"><small>${esc(m.sender_name)}</small><div class="bubble">${esc(m.body)}</div><small>${datetime(m.created_at)}</small></div>`).join("")
+      || `<p class="muted" style="text-align:center;margin:auto">첫 메시지를 보내 상담을 시작하세요.</p>`;
+    body.scrollTop = body.scrollHeight;
+  };
+  $("#chatForm", box).onsubmit = async (e) => {
+    e.preventDefault(); const t = $("#chatInput", box).value.trim(); if (!t) return;
+    $("#chatInput", box).value = ""; await store.sendMessage(request.id, vendorId, t); draw();
+  };
+  await draw();
+  pollTimer = setInterval(draw, 4000);
+}
+
+const requestInfo = (r) => `
+  <div class="flex between"><h2 style="margin:0">${esc(r.title)}</h2>${rBadge(r.status)}</div>
+  <dl class="info">
+    <dt>분야 / 지역</dt><dd>${esc(r.category)} · ${esc(r.region)}</dd>
+    <dt>희망 시작일</dt><dd>${esc(r.service_date)}</dd>
+    <dt>예산</dt><dd>${r.budget ? won(r.budget) : "협의"}</dd>
+    <dt>요청자</dt><dd>${esc(r.customer_name)}</dd>
+    <dt>등록일</dt><dd>${date(r.created_at)}</dd>
+  </dl>
+  <p style="white-space:pre-wrap;background:var(--bg);padding:14px;border-radius:10px">${esc(r.details)}</p>`;
+
+// ---------- CUSTOMER ----------
+async function customerView() {
+  $("#title").textContent = "내 견적 요청";
+  $("#subtitle").textContent = "받은 견적을 비교하고 업체와 상담한 뒤 선정·결제하세요.";
+  $("#headAct").innerHTML = `<a class="p-btn" href="/platform/request">+ 새 견적 요청</a>`;
+  $("#tabs").innerHTML = `<button class="on" data-t="req">견적 요청</button><button data-t="pay">결제 내역</button>`;
+  $$("#tabs button").forEach((b) => (b.onclick = () => { $$("#tabs button").forEach((x) => x.classList.toggle("on", x === b)); b.dataset.t === "req" ? requestsTab() : paymentsTab(); }));
+  requestsTab();
+}
+
+async function requestsTab(selectId = qs("request")) {
+  const rs = await store.listMyRequests();
+  if (!rs.length) { $("#view").innerHTML = `<div class="card empty">아직 견적 요청이 없습니다.<br><a class="p-btn mt" href="/platform/request">첫 견적 요청하기</a></div>`; return; }
+  const counts = {}; for (const r of rs) counts[r.id] = (await store.listQuotesForRequest(r.id)).length;
+  $("#view").innerHTML = `<div class="dash"><div class="list" id="rlist"></div><div id="detail"></div></div>`;
+  $("#rlist").innerHTML = rs.map((r) => `
+    <div class="item" data-id="${r.id}">
+      <div class="flex between"><h3>${esc(r.title)}</h3></div>
+      <div class="meta">${esc(r.category)} · ${esc(r.region)} · ${date(r.created_at)}</div>
+      <div class="flex mt" style="margin-top:8px">${rBadge(r.status)} <span class="badge">견적 ${counts[r.id]}건</span></div>
+    </div>`).join("");
+  $$("#rlist .item").forEach((el) => (el.onclick = () => showCustomerRequest(el.dataset.id)));
+  showCustomerRequest(rs.find((r) => r.id === selectId) ? selectId : rs[0].id);
+  if (qs("new")) toast("견적 요청이 등록되었습니다. 조건에 맞는 업체에 전달됩니다.");
+}
+
+async function showCustomerRequest(id) {
+  $$("#rlist .item").forEach((x) => x.classList.toggle("active", x.dataset.id === id));
+  const r = await store.getRequest(id);
+  const quotes = await store.listQuotesForRequest(id);
+  const threads = await store.listThreads(id);
+  const sel = quotes.find((q) => q.status === "accepted");
+  const target = r.target_vendor_id ? await store.getVendor(r.target_vendor_id) : null;
+  $("#detail").innerHTML = `
+    <div class="card">${requestInfo(r)}${target ? `<p class="mt">${badge("지정 업체", "navy")} ${esc(target.company)}</p>` : ""}
+      ${r.status === "open" ? `<button class="p-btn p-btn-line p-btn-sm mt" id="cancelReq">요청 취소</button>` : ""}
+      ${r.status === "paid" ? `<div class="flex mt"><span class="muted">서비스가 완료되면 확인 버튼을 눌러주세요. 확인 후 업체에 정산됩니다.</span><button class="p-btn p-btn-sm" id="doneReq">서비스 완료 확인</button></div>` : ""}
+    </div>
+    <div class="card">
+      <h2>받은 견적 (${quotes.length})</h2>
+      ${quotes.map((q) => `
+        <div class="quote" ${q.status === "accepted" ? 'style="border-color:var(--teal)"' : ""}>
+          <div class="flex between"><b>${esc(q.vendor_company)}</b>${badge(QUOTE_STATUS[q.status], q.status === "accepted" ? "ok" : q.status === "rejected" ? "" : "teal")}</div>
+          <div class="amt">${won(q.amount)}</div>
+          <p class="muted" style="white-space:pre-wrap;font-size:14px">${esc(q.message)}</p>
+          <div class="flex mt">
+            <a class="p-btn p-btn-line p-btn-sm" href="/platform/vendor?id=${q.vendor_id}" target="_blank">업체 정보</a>
+            <button class="p-btn p-btn-line p-btn-sm" data-chat="${q.vendor_id}" data-name="${esc(q.vendor_company)}">상담하기</button>
+            ${r.status === "open" ? `<button class="p-btn p-btn-sm" data-accept="${q.id}">이 업체 선정</button>` : ""}
+            ${q.status === "accepted" && r.status === "matched" ? `<button class="p-btn p-btn-navy p-btn-sm" data-pay="${q.id}">결제하기</button>` : ""}
+          </div>
+        </div>`).join("") || `<p class="empty">아직 받은 견적이 없습니다. 업체가 견적을 보내면 여기에 표시됩니다.</p>`}
+    </div>
+    <div class="card"><h2>업체 상담</h2>
+      <div class="threads" id="threads">${threads.map((v) => `<button data-chat="${v.id}" data-name="${esc(v.company)}">${esc(v.company)}</button>`).join("") || (target ? `<button data-chat="${target.id}" data-name="${esc(target.company)}">${esc(target.company)}</button>` : "")}</div>
+      <div id="chatBox"><p class="muted">견적을 보낸 업체와 1:1 상담을 할 수 있습니다.</p></div>
+    </div>`;
+  const openChat = (vid, name) => { $$("#threads button").forEach((b) => b.classList.toggle("on", b.dataset.chat === vid)); renderChat($("#chatBox"), r, vid, name); };
+  $$("[data-chat]").forEach((b) => (b.onclick = () => openChat(b.dataset.chat, b.dataset.name)));
+  const first = sel ? sel.vendor_id : (threads[0]?.id || target?.id);
+  if (first) openChat(first, (sel?.vendor_company) || threads.find((t) => t.id === first)?.company || target?.company);
+  $$("[data-accept]").forEach((b) => (b.onclick = async () => {
+    if (!confirm("이 업체를 선정할까요? 다른 견적은 미선정 처리됩니다.")) return;
+    try { await store.acceptQuote(b.dataset.accept); toast("업체를 선정했습니다. 결제를 진행해 주세요."); requestsTab(id); } catch (e) { toast(e.message, "bad"); }
+  }));
+  $$("[data-pay]").forEach((b) => (b.onclick = () => startPayment(quotes.find((q) => q.id === b.dataset.pay), me)));
+  const c = $("#cancelReq"); if (c) c.onclick = async () => { if (confirm("견적 요청을 취소할까요?")) { await store.updateRequestStatus(id, "canceled"); requestsTab(id); } };
+  const d = $("#doneReq"); if (d) d.onclick = async () => { if (confirm("서비스가 완료되었나요?")) { await store.updateRequestStatus(id, "completed"); toast("완료 처리되었습니다."); requestsTab(id); } };
+}
+
+async function paymentsTab() {
+  clearInterval(pollTimer);
+  const ps = await store.listPayments();
+  const pTone = { paid: "ok", ready: "warn", failed: "bad", refunded: "" };
+  const pLabel = { paid: "결제완료", ready: "결제대기", failed: "실패", refunded: "환불" };
+  $("#view").innerHTML = ps.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>주문번호</th><th>내용</th><th>금액</th>${vendor ? "<th>수수료</th><th>정산 예정액</th>" : ""}<th>상태</th><th>일시</th></tr></thead><tbody>
+    ${ps.map((p) => `<tr><td>${esc(p.order_id)}</td><td>${esc(p.order_name || "")}</td><td>${won(p.amount)}</td>${vendor ? `<td>${won(p.fee)}</td><td><b>${won(p.amount - p.fee)}</b></td>` : ""}<td>${badge(pLabel[p.status] || p.status, pTone[p.status])}</td><td>${datetime(p.paid_at || p.created_at)}</td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="card empty">결제 내역이 없습니다.</div>`;
+}
+
+// ---------- VENDOR ----------
+async function vendorView() {
+  $("#title").textContent = "업체 센터";
+  if (!vendor) {
+    $("#view").innerHTML = `<div class="card empty">업체 정보가 등록되지 않았습니다.<br><a class="p-btn mt" href="/platform/vendor-join">업체 등록하기</a></div>`; return;
+  }
+  $("#subtitle").textContent = vendor.company;
+  $("#headAct").innerHTML = `<a class="p-btn p-btn-line" href="/platform/vendor-join">업체 정보 수정</a>`;
+  if (vendor.status !== "approved") {
+    $("#banner").innerHTML = `<div class="card mb">${badge(VENDOR_STATUS[vendor.status], vendor.status === "pending" ? "warn" : "bad")} ${vendor.status === "pending" ? "관리자 승인 후 견적 요청을 받을 수 있습니다." : "등록이 반려되었습니다. 정보를 수정해 다시 신청해 주세요."}</div>`;
+    return;
+  }
+  $("#tabs").innerHTML = `<button class="on" data-t="match">받은 요청</button><button data-t="quotes">내 견적</button><button data-t="pay">결제 · 정산</button>`;
+  $$("#tabs button").forEach((b) => (b.onclick = () => { $$("#tabs button").forEach((x) => x.classList.toggle("on", x === b)); ({ match: matchTab, quotes: myQuotesTab, pay: paymentsTab })[b.dataset.t](); }));
+  matchTab();
+}
+
+async function matchTab(selectId = qs("request")) {
+  const rs = await store.listMatchedRequests();
+  const myQ = await store.listMyQuotes();
+  const qBy = Object.fromEntries(myQ.map((q) => [q.request_id, q]));
+  if (!rs.length) { $("#view").innerHTML = `<div class="card empty">아직 조건(분야·지역)에 맞는 견적 요청이 없습니다.<br><span class="muted">서비스 분야·지역을 넓히면 더 많은 요청을 받을 수 있습니다.</span></div>`; return; }
+  $("#view").innerHTML = `<div class="dash"><div class="list" id="rlist"></div><div id="detail"></div></div>`;
+  $("#rlist").innerHTML = rs.map((r) => `
+    <div class="item" data-id="${r.id}">
+      <h3>${esc(r.title)}</h3>
+      <div class="meta">${esc(r.category)} · ${esc(r.region)} · ${esc(r.service_date)}</div>
+      <div class="flex" style="margin-top:8px">${rBadge(r.status)} ${r.target_vendor_id ? badge("지정 요청", "navy") : ""} ${qBy[r.id] ? badge("견적 " + QUOTE_STATUS[qBy[r.id].status], qBy[r.id].status === "accepted" ? "ok" : "") : badge("미제출", "warn")}</div>
+    </div>`).join("");
+  $$("#rlist .item").forEach((el) => (el.onclick = () => showVendorRequest(el.dataset.id, qBy[el.dataset.id])));
+  const first = rs.find((r) => r.id === selectId) ? selectId : rs[0].id;
+  showVendorRequest(first, qBy[first]);
+}
+
+async function showVendorRequest(id, myQuote) {
+  $$("#rlist .item").forEach((x) => x.classList.toggle("active", x.dataset.id === id));
+  const r = await store.getRequest(id);
+  const canQuote = r.status === "open";
+  $("#detail").innerHTML = `
+    <div class="card">${requestInfo(r)}</div>
+    <div class="card">
+      <h2>${myQuote ? "내 견적" : "견적 보내기"}</h2>
+      ${myQuote ? `<p>${badge(QUOTE_STATUS[myQuote.status], myQuote.status === "accepted" ? "ok" : "teal")} <b style="font-size:18px;margin-left:6px">${won(myQuote.amount)}</b></p>` : ""}
+      ${canQuote ? `
+      <form id="qForm" class="mt">
+        <div class="field"><label>견적 금액 (원, VAT 포함)<em>*</em></label><input type="number" name="amount" min="10000" step="1000" required value="${myQuote?.amount || ""}"></div>
+        <div class="field"><label>견적 내용<em>*</em></label><textarea name="message" required placeholder="투입 인원, 근무 형태, 포함 사항, 조건 등">${esc(myQuote?.message || "")}</textarea></div>
+        <button class="p-btn">${myQuote ? "견적 수정" : "견적 제출"}</button>
+      </form>` : `<p class="muted mt">${myQuote?.status === "accepted" ? (r.status === "matched" ? "선정되었습니다. 고객 결제를 기다리고 있습니다." : r.status === "paid" ? "결제가 완료되었습니다. 서비스를 진행해 주세요." : "") : "견적 모집이 종료되었습니다."}</p>`}
+    </div>
+    <div class="card"><h2>고객 상담</h2><div id="chatBox"></div></div>`;
+  renderChat($("#chatBox"), r, vendor.id, r.customer_name + " 고객님");
+  const f = $("#qForm");
+  if (f) f.onsubmit = async (e) => {
+    e.preventDefault(); const fd = new FormData(f);
+    try { await store.createQuote({ request_id: id, amount: Number(fd.get("amount")), message: fd.get("message") }); toast("견적을 보냈습니다."); matchTab(id); }
+    catch (err) { toast(err.message, "bad"); }
+  };
+}
+
+async function myQuotesTab() {
+  clearInterval(pollTimer);
+  const qs_ = await store.listMyQuotes();
+  const rows = [];
+  for (const q of qs_) { const r = await store.getRequest(q.request_id); rows.push({ q, r }); }
+  $("#view").innerHTML = rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>요청</th><th>분야/지역</th><th>견적 금액</th><th>견적 상태</th><th>요청 상태</th><th>제출일</th></tr></thead><tbody>
+    ${rows.map(({ q, r }) => `<tr><td><a href="?request=${r.id}" style="color:var(--blue);font-weight:600">${esc(r.title)}</a></td><td>${esc(r.category)} · ${esc(r.region)}</td><td>${won(q.amount)}</td><td>${badge(QUOTE_STATUS[q.status], q.status === "accepted" ? "ok" : "")}</td><td>${rBadge(r.status)}</td><td>${date(q.created_at)}</td></tr>`).join("")}
+    </tbody></table></div>` : `<div class="card empty">제출한 견적이 없습니다.</div>`;
+}
+
+me.role === "vendor" ? vendorView() : customerView();
+</script>
+</body>
+</html>

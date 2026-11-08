@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업체 찾기 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+</head>
+<body>
+<main>
+  <div class="p-container">
+    <div class="page-head"><h1>업체 찾기</h1><p>승인된 허가 업체를 분야·지역별로 찾아보고 직접 견적을 요청하세요.</p></div>
+    <form class="filters" id="f">
+      <select id="cat"></select>
+      <select id="reg"></select>
+      <input id="q" placeholder="업체명, 소개 검색">
+      <button class="p-btn">검색</button>
+    </form>
+    <p class="muted mb" id="count"></p>
+    <div class="grid g3" id="list"></div>
+  </div>
+</main>
+<script type="module">
+import { renderHeader, $, esc, options, qs, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
+await renderHeader();
+$("#cat").innerHTML = options(CATEGORIES, qs("category") || "", "전체 분야");
+$("#reg").innerHTML = options(REGIONS, qs("region") || "", "전체 지역");
+async function load() {
+  const vs = await store.listVendors({ category: $("#cat").value, region: $("#reg").value, q: $("#q").value.trim() });
+  $("#count").textContent = `${vs.length}개 업체`;
+  $("#list").innerHTML = vs.map((v) => `
+    <div class="vcard">
+      <div class="flex between"><h3>${esc(v.company)}</h3><span class="star">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0})</small></span></div>
+      <div class="tags">${v.categories.map((c) => `<span class="badge teal">${esc(c)}</span>`).join("")}</div>
+      <p>${esc(v.intro)}</p>
+      <small class="muted">지역: ${esc(v.regions.join(", "))}</small>
+      <div class="flex"><a class="p-btn p-btn-line p-btn-sm" href="/platform/vendor?id=${v.id}">상세 보기</a><a class="p-btn p-btn-sm" href="/platform/request?vendor=${v.id}">견적 요청</a></div>
+    </div>`).join("") || `<div class="empty" style="grid-column:1/-1">조건에 맞는 업체가 없습니다. <a href="/platform/request" style="color:var(--blue)">공개 견적 요청</a>을 남겨보세요.</div>`;
+}
+$("#f").onsubmit = (e) => { e.preventDefault(); load(); };
+$("#cat").onchange = load; $("#reg").onchange = load;
+load();
+</script>
+</body>
+</html>

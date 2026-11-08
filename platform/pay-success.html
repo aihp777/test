@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>결제 확인 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+</head>
+<body>
+<main><div class="p-container" style="max-width:520px;padding:60px 0"><div class="card" id="box" style="text-align:center"><p class="muted">결제를 확인하고 있습니다...</p></div></div></main>
+<script type="module">
+import { renderHeader, $, esc, won, qs, store } from "/assets/js/ui.js";
+import { IS_DEMO } from "/assets/js/config.js";
+await renderHeader();
+const orderId = qs("orderId");
+const done = (p) => {
+  $("#box").innerHTML = `<div style="font-size:48px">✅</div><h2 style="color:var(--navy)">결제가 완료되었습니다</h2>
+    <p class="muted">주문번호 ${esc(p.order_id)}</p><p style="font-size:22px;font-weight:800;margin:10px 0">${won(p.amount)}</p>
+    <p class="muted" style="font-size:14px">업체가 서비스를 진행합니다. 완료 후 마이페이지에서 완료 확인을 눌러주세요.</p>
+    <a class="p-btn mt" href="/platform/dashboard?request=${p.request_id}">마이페이지로</a>`;
+};
+const fail = (msg) => { $("#box").innerHTML = `<div style="font-size:48px">⚠️</div><h2>결제 확인 실패</h2><p class="muted">${esc(msg)}</p><a class="p-btn mt" href="/platform/dashboard">마이페이지로</a>`; };
+try {
+  if (IS_DEMO) {
+    const p = await store.getPaymentByOrder(orderId); p ? done(p) : fail("주문을 찾을 수 없습니다.");
+  } else {
+    // 토스페이먼츠 리다이렉트: paymentKey, orderId, amount → 서버에서 승인
+    const res = await fetch("/api/payments/confirm", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentKey: qs("paymentKey"), orderId, amount: Number(qs("amount")) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "결제 승인에 실패했습니다.");
+    done(data.payment);
+  }
+} catch (e) { fail(e.message); }
+</script>
+</body>
+</html>

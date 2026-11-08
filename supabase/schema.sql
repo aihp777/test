@@ -1,0 +1,277 @@
+-- =============================================================
+--  와이드가드 매칭 플랫폼 - Supabase 스키마
+--  Supabase 대시보드 > SQL Editor 에 전체를 붙여넣고 Run 하세요.
+-- =============================================================
+
+-- ---------- 회원 프로필 ----------
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null default '',
+  phone text,
+  role text not null default 'customer' check (role in ('customer', 'vendor', 'admin')),
+  created_at timestamptz not null default now()
+);
+
+-- 가입 시 프로필 자동 생성 (admin 은 가입으로 만들 수 없음)
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, name, phone, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', ''),
+    new.raw_user_meta_data->>'phone',
+    case when new.raw_user_meta_data->>'role' = 'vendor' then 'vendor' else 'customer' end
+  );
+  return new;
+end $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from profiles where id = auth.uid() and role = 'admin');
+$$;
+
+-- ---------- 업체 ----------
+create table if not exists public.vendors (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null unique references public.profiles(id) on delete cascade,
+  company text not null,
+  ceo text not null,
+  biz_no text not null,
+  phone text not null,
+  email text not null,
+  address text,
+  license_info text,
+  categories text[] not null default '{}',
+  regions text[] not null default '{}',
+  intro text not null default '',
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  rating numeric(2,1) not null default 0,
+  review_count int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- 견적 요청 ----------
+create table if not exists public.requests (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid not null references public.profiles(id) on delete cascade,
+  customer_name text not null default '',
+  category text not null,
+  region text not null,
+  title text not null,
+  details text not null,
+  service_date date not null,
+  budget bigint,
+  target_vendor_id uuid references public.vendors(id) on delete set null,
+  status text not null default 'open' check (status in ('open', 'matched', 'paid', 'in_progress', 'completed', 'canceled')),
+  selected_quote_id uuid,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- 견적 ----------
+create table if not exists public.quotes (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.requests(id) on delete cascade,
+  vendor_id uuid not null references public.vendors(id) on delete cascade,
+  vendor_company text not null default '',
+  amount bigint not null check (amount > 0),
+  message text not null default '',
+  status text not null default 'submitted' check (status in ('submitted', 'accepted', 'rejected')),
+  created_at timestamptz not null default now(),
+  unique (request_id, vendor_id)
+);
+
+-- ---------- 상담 메시지 ----------
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  request_id uuid not null references public.requests(id) on delete cascade,
+  vendor_id uuid not null references public.vendors(id) on delete cascade,
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  sender_name text not null default '',
+  body text not null check (char_length(body) between 1 and 1000),
+  created_at timestamptz not null default now()
+);
+
+-- ---------- 결제 ----------
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  order_id text not null unique,
+  order_name text,
+  request_id uuid not null references public.requests(id) on delete cascade,
+  quote_id uuid not null references public.quotes(id) on delete cascade,
+  customer_id uuid not null references public.profiles(id),
+  vendor_id uuid not null references public.vendors(id),
+  amount bigint not null,
+  fee bigint not null,
+  status text not null default 'ready' check (status in ('ready', 'paid', 'failed', 'refunded')),
+  payment_key text,
+  method text,
+  created_at timestamptz not null default now(),
+  paid_at timestamptz
+);
+
+-- ---------- 설정 ----------
+create table if not exists public.settings (
+  id int primary key default 1 check (id = 1),
+  fee_rate numeric(5,4) not null default 0.1
+);
+insert into public.settings (id, fee_rate) values (1, 0.1) on conflict (id) do nothing;
+
+create index if not exists idx_requests_match on public.requests (status, category, region);
+create index if not exists idx_quotes_request on public.quotes (request_id);
+create index if not exists idx_messages_thread on public.messages (request_id, vendor_id, created_at);
+
+-- =============================================================
+--  RPC: 견적 선정 / 결제 생성 (금액은 서버에서 계산)
+-- =============================================================
+create or replace function public.accept_quote(p_quote_id uuid) returns public.quotes
+language plpgsql security definer set search_path = public as $$
+declare q quotes; r requests;
+begin
+  select * into q from quotes where id = p_quote_id;
+  select * into r from requests where id = q.request_id;
+  if r.customer_id <> auth.uid() then raise exception '권한이 없습니다.'; end if;
+  if r.status <> 'open' then raise exception '이미 업체가 선정된 요청입니다.'; end if;
+  update quotes set status = case when id = p_quote_id then 'accepted' else 'rejected' end where request_id = r.id;
+  update requests set status = 'matched', selected_quote_id = p_quote_id where id = r.id;
+  select * into q from quotes where id = p_quote_id;
+  return q;
+end $$;
+
+create or replace function public.create_payment(p_quote_id uuid) returns public.payments
+language plpgsql security definer set search_path = public as $$
+declare q quotes; r requests; rate numeric; p payments;
+begin
+  select * into q from quotes where id = p_quote_id;
+  select * into r from requests where id = q.request_id;
+  if r.customer_id <> auth.uid() or q.status <> 'accepted' or r.status <> 'matched' then
+    raise exception '결제할 수 없는 견적입니다.';
+  end if;
+  select fee_rate into rate from settings where id = 1;
+  insert into payments (order_id, order_name, request_id, quote_id, customer_id, vendor_id, amount, fee)
+  values (
+    'WG' || to_char(now(), 'YYYYMMDDHH24MISS') || upper(substr(md5(random()::text), 1, 6)),
+    left('[' || r.category || '] ' || r.title, 90),
+    r.id, q.id, r.customer_id, q.vendor_id, q.amount, round(q.amount * rate)
+  ) returning * into p;
+  return p;
+end $$;
+
+-- =============================================================
+--  Row Level Security
+-- =============================================================
+alter table public.profiles enable row level security;
+alter table public.vendors  enable row level security;
+alter table public.requests enable row level security;
+alter table public.quotes   enable row level security;
+alter table public.messages enable row level security;
+alter table public.payments enable row level security;
+alter table public.settings enable row level security;
+
+-- helper: 내 업체 id
+create or replace function public.my_vendor_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select id from vendors where owner_id = auth.uid() and status = 'approved';
+$$;
+
+-- helper: RLS 상호참조(무한 재귀) 방지용
+create or replace function public.owns_request(p_request_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from requests where id = p_request_id and customer_id = auth.uid());
+$$;
+create or replace function public.vendor_quoted(p_request_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from quotes where request_id = p_request_id and vendor_id = public.my_vendor_id());
+$$;
+create or replace function public.request_is_open(p_request_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from requests where id = p_request_id and status = 'open');
+$$;
+
+-- profiles
+drop policy if exists "profiles self read" on public.profiles;
+create policy "profiles self read" on public.profiles for select using (id = auth.uid() or public.is_admin());
+drop policy if exists "profiles self update" on public.profiles;
+create policy "profiles self update" on public.profiles for update using (id = auth.uid())
+  with check (id = auth.uid() and role in ('customer', 'vendor'));
+
+-- vendors: 승인 업체는 누구나 조회, 본인/관리자는 전체
+drop policy if exists "vendors read" on public.vendors;
+create policy "vendors read" on public.vendors for select using (status = 'approved' or owner_id = auth.uid() or public.is_admin());
+drop policy if exists "vendors insert" on public.vendors;
+create policy "vendors insert" on public.vendors for insert with check (owner_id = auth.uid() and status = 'pending');
+drop policy if exists "vendors update own" on public.vendors;
+create policy "vendors update own" on public.vendors for update using (owner_id = auth.uid() or public.is_admin());
+
+-- 업체가 스스로 status / rating 을 바꾸지 못하도록 트리거로 보호
+create or replace function public.protect_vendor_fields() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then
+    new.status := case when old.status = 'rejected' then 'pending' else old.status end;
+    new.rating := old.rating; new.review_count := old.review_count; new.owner_id := old.owner_id;
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_protect_vendor on public.vendors;
+create trigger trg_protect_vendor before update on public.vendors for each row execute function public.protect_vendor_fields();
+
+-- requests
+drop policy if exists "requests read" on public.requests;
+create policy "requests read" on public.requests for select using (
+  customer_id = auth.uid() or public.is_admin()
+  or (public.my_vendor_id() is not null and (
+        (status = 'open' and target_vendor_id is null)
+        or target_vendor_id = public.my_vendor_id()
+        or public.vendor_quoted(requests.id)
+  ))
+);
+drop policy if exists "requests insert" on public.requests;
+create policy "requests insert" on public.requests for insert with check (customer_id = auth.uid() and status = 'open');
+drop policy if exists "requests update" on public.requests;
+create policy "requests update" on public.requests for update using (customer_id = auth.uid() or public.is_admin())
+  with check (public.is_admin() or status in ('canceled', 'completed'));
+
+-- quotes
+drop policy if exists "quotes read" on public.quotes;
+create policy "quotes read" on public.quotes for select using (
+  vendor_id = public.my_vendor_id() or public.is_admin() or public.owns_request(quotes.request_id)
+);
+drop policy if exists "quotes insert" on public.quotes;
+create policy "quotes insert" on public.quotes for insert with check (
+  vendor_id = public.my_vendor_id() and status = 'submitted' and public.request_is_open(request_id)
+);
+drop policy if exists "quotes update" on public.quotes;
+create policy "quotes update" on public.quotes for update using (vendor_id = public.my_vendor_id() and status = 'submitted')
+  with check (status = 'submitted');
+
+-- messages: 해당 요청의 고객 또는 해당 업체만
+drop policy if exists "messages read" on public.messages;
+create policy "messages read" on public.messages for select using (
+  public.is_admin() or vendor_id = public.my_vendor_id() or public.owns_request(messages.request_id)
+);
+drop policy if exists "messages insert" on public.messages;
+create policy "messages insert" on public.messages for insert with check (
+  sender_id = auth.uid() and (vendor_id = public.my_vendor_id() or public.owns_request(request_id))
+);
+
+-- payments: 조회만 (생성은 create_payment, 승인은 서버 함수가 service_role 로 처리)
+drop policy if exists "payments read" on public.payments;
+create policy "payments read" on public.payments for select using (
+  customer_id = auth.uid() or vendor_id = public.my_vendor_id() or public.is_admin()
+);
+
+-- settings
+drop policy if exists "settings read" on public.settings;
+create policy "settings read" on public.settings for select using (true);
+drop policy if exists "settings admin" on public.settings;
+create policy "settings admin" on public.settings for update using (public.is_admin());
+
+-- =============================================================
+--  관리자 지정: 가입 후 아래 이메일을 바꿔 실행하세요.
+--  update public.profiles set role = 'admin'
+--   where id = (select id from auth.users where email = 'admin@your-company.com');
+-- =============================================================

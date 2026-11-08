@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>업체 등록 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+</head>
+<body>
+<main>
+  <div class="p-container" style="max-width:800px">
+    <div class="page-head"><h1>동종업체 등록</h1><p>등록 후 관리자 승인이 완료되면 분야·지역에 맞는 견적 요청을 받을 수 있습니다.</p></div>
+    <div id="status"></div>
+    <form class="card" id="form">
+      <h2>기본 정보</h2>
+      <div class="row2">
+        <div class="field"><label>상호(법인명)<em>*</em></label><input name="company" required></div>
+        <div class="field"><label>대표자명<em>*</em></label><input name="ceo" required></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>사업자등록번호<em>*</em></label><input name="biz_no" required pattern="\d{3}-?\d{2}-?\d{5}" placeholder="000-00-00000"></div>
+        <div class="field"><label>대표 연락처<em>*</em></label><input name="phone" required></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>이메일<em>*</em></label><input type="email" name="email" required></div>
+        <div class="field"><label>사업장 주소</label><input name="address"></div>
+      </div>
+      <div class="field"><label>보유 허가 · 인증</label><input name="license_info" placeholder="예) 경비업 허가증(시설·신변보호), 분사기 허가증"><small>경비업은 관할 시·도경찰청 허가가 필요합니다. 승인 심사 시 허가증 사본을 요청할 수 있습니다.</small></div>
+
+      <h2 class="mt">서비스 분야<em style="color:var(--bad)">*</em></h2>
+      <div class="chips mb" id="cats"></div>
+      <h2>서비스 지역<em style="color:var(--bad)">*</em></h2>
+      <div class="chips mb" id="regs"></div>
+
+      <div class="field"><label>업체 소개<em>*</em></label><textarea name="intro" required placeholder="주요 실적, 보유 인력, 강점 등을 소개해 주세요."></textarea></div>
+      <button class="p-btn" style="width:100%" id="submit">등록 신청</button>
+    </form>
+  </div>
+</main>
+<script type="module">
+import { renderHeader, requireLogin, $, $$, esc, badge, toast, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
+import { VENDOR_STATUS } from "/assets/js/config.js";
+await renderHeader();
+await requireLogin();
+const chip = (name, v) => `<label><input type="checkbox" name="${name}" value="${esc(v)}"><span>${esc(v)}</span></label>`;
+$("#cats").innerHTML = CATEGORIES.map((c) => chip("categories", c)).join("");
+$("#regs").innerHTML = REGIONS.map((r) => chip("regions", r)).join("");
+
+const mine = await store.myVendor();
+if (mine) {
+  const tone = { approved: "ok", pending: "warn", rejected: "bad" }[mine.status];
+  $("#status").innerHTML = `<div class="card mb flex between"><div>현재 상태 ${badge(VENDOR_STATUS[mine.status], tone)} <span class="muted">정보를 수정하면 다시 저장됩니다.</span></div><a class="p-btn p-btn-sm" href="/platform/dashboard">마이페이지</a></div>`;
+  const f = $("#form");
+  ["company", "ceo", "biz_no", "phone", "email", "address", "license_info", "intro"].forEach((k) => (f[k].value = mine[k] || ""));
+  $$("input[name=categories]").forEach((i) => (i.checked = mine.categories.includes(i.value)));
+  $$("input[name=regions]").forEach((i) => (i.checked = mine.regions.includes(i.value)));
+  $("#submit").textContent = "정보 저장";
+}
+$("#form").onsubmit = async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const data = Object.fromEntries(["company", "ceo", "biz_no", "phone", "email", "address", "license_info", "intro"].map((k) => [k, fd.get(k)]));
+  data.categories = fd.getAll("categories"); data.regions = fd.getAll("regions");
+  if (!data.categories.length || !data.regions.length) return toast("서비스 분야와 지역을 1개 이상 선택하세요.", "bad");
+  try { await store.registerVendor(data); toast("저장되었습니다."); setTimeout(() => (location.href = "/platform/dashboard"), 700); }
+  catch (err) { toast(err.message, "bad"); }
+};
+</script>
+</body>
+</html>
