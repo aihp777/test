@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>관리자 콘솔 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+<link rel="stylesheet" href="/assets/admin.css">
+</head>
+<body class="admin">
+  <aside class="a-side" id="side">
+    <a class="a-brand" href="#dashboard"><img src="/images/logo-white.png" alt=""><span><b>WIDE GUARD</b><small>관리자 콘솔</small></span></a>
+    <nav class="a-nav" id="nav">
+      <a href="#dashboard" data-v="dashboard"><span class="ico">📊</span>대시보드</a>
+      <a href="#users" data-v="users"><span class="ico">👤</span>회원 관리</a>
+      <a href="#vendors" data-v="vendors"><span class="ico">🏢</span>업체 관리<span class="cnt" id="cntVendors" hidden></span></a>
+      <a href="#requests" data-v="requests"><span class="ico">📝</span>견적 요청</a>
+      <a href="#payments" data-v="payments"><span class="ico">💳</span>결제 · 정산<span class="cnt" id="cntPay" hidden></span></a>
+      <a href="#settings" data-v="settings"><span class="ico">⚙️</span>설정</a>
+    </nav>
+    <div class="a-side-foot">
+      <a href="/platform/" target="_blank">↗ 매칭 플랫폼</a>
+      <a href="/" target="_blank">↗ 회사 홈페이지</a>
+    </div>
+  </aside>
+  <header class="a-top">
+    <div class="flex"><button class="a-menu" id="menu" aria-label="메뉴">☰</button><h1 id="viewTitle">대시보드</h1></div>
+    <div class="who"><span id="who"></span><button class="p-link" id="logout">로그아웃</button></div>
+  </header>
+  <main class="a-main" id="main"></main>
+
+  <div class="drawer-bg" id="drawerBg"></div>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-head"><h2 id="drawerTitle"></h2><button id="drawerClose" aria-label="닫기">✕</button></div>
+    <div class="drawer-body" id="drawerBody"></div>
+    <div class="drawer-foot" id="drawerFoot"></div>
+  </aside>
+  <div id="chartTip"></div>
+
+<script type="module" src="/assets/js/admin.js"></script>
+</body>
+</html>

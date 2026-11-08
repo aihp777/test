@@ -307,6 +307,38 @@ create policy "request photos read" on storage.objects for select to authenticat
   );
 
 -- =============================================================
+--  관리자 콘솔 (/admin) 용 컬럼 · 권한
+-- =============================================================
+alter table public.profiles add column if not exists email text;
+alter table public.vendors  add column if not exists admin_memo text;
+alter table public.payments add column if not exists settlement_status text not null default 'pending';
+alter table public.payments add column if not exists settled_at timestamptz;
+alter table public.payments add column if not exists refund_reason text;
+alter table public.payments add column if not exists refunded_at timestamptz;
+
+-- 가입 시 이메일도 프로필에 저장
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, name, phone, email, role)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', ''),
+    new.raw_user_meta_data->>'phone',
+    new.email,
+    case when new.raw_user_meta_data->>'role' = 'vendor' then 'vendor' else 'customer' end
+  );
+  return new;
+end $$;
+update public.profiles p set email = u.email from auth.users u where u.id = p.id and p.email is null;
+
+drop policy if exists "profiles admin update" on public.profiles;
+create policy "profiles admin update" on public.profiles for update using (public.is_admin());
+
+drop policy if exists "payments admin update" on public.payments;
+create policy "payments admin update" on public.payments for update using (public.is_admin());
+
+-- =============================================================
 --  관리자 지정: 가입 후 아래 이메일을 바꿔 실행하세요.
 --  update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'admin@your-company.com');

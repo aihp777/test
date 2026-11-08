@@ -16,7 +16,7 @@
 | 업체 등록 | `/platform/vendor-join` | 동종업체 등록 신청 (사업자번호, 허가, 분야, 지역) → 관리자 승인 |
 | 마이페이지(고객) | `/platform/dashboard` | 받은 견적 비교, 업체별 1:1 상담, 업체 선정, 결제, 완료 확인 |
 | 업체 센터 | `/platform/dashboard` | 자동 매칭된 요청 확인, 견적 제출/수정, 고객 상담, 정산 예정액 |
-| 관리자 | `/platform/admin` | 업체 승인/반려/정지, 전체 요청, 거래액·수수료 통계, 수수료율 설정 |
+| **관리자 콘솔** | `/admin` | 대시보드(KPI·월별 거래액·분야/지역별 요청·처리할 일), 회원 관리(유형 변경), 업체 관리(심사·승인·정지·메모), 견적 요청(사진·견적·상담 내역 열람, 상태 변경), 결제·정산(정산 완료 처리, 전액 환불), 수수료 설정, CSV 내보내기 |
 
 **매칭 규칙 (전국 운영):** 고객 요청의 `분야`가 업체 분야에 포함되고 `지역`이 업체 서비스 지역에 포함되면 승인 업체에 자동 노출됩니다. 서비스 지역을 **전국**으로 등록한 업체는 모든 지역 요청을 받고, 고객이 지역을 **전국(지역 무관)**으로 요청하면 해당 분야의 모든 업체에 전달됩니다. 업체 등록 시 수도권·충청권·호남권·영남권·강원권·제주권 버튼으로 권역 단위 선택이 가능합니다. 업체를 지정한 요청은 그 업체에만 보입니다.
 
@@ -39,6 +39,7 @@
    - `TOSS_SECRET_KEY` : 토스페이먼츠 시크릿 키
    - `SUPABASE_URL` : Supabase Project URL
    - `SUPABASE_SERVICE_ROLE_KEY` : Supabase service_role 키 (**절대 config.js에 넣지 마세요**)
+   - 위 3개는 결제 승인(`api/payments/confirm.js`)과 관리자 환불(`api/payments/cancel.js`)에 사용됩니다.
 4. 커밋 후 push → Vercel 자동 배포
 
 ### 운영 전 확인할 것
@@ -52,7 +53,8 @@
 widegard-homepage/
 ├── platform/       # 매칭 플랫폼 페이지들
 ├── assets/         # 플랫폼 CSS, JS (config.js = 키 설정, store.js = 데이터 계층, pay.js = 결제)
-├── api/payments/confirm.js   # Vercel 서버 함수: 토스페이먼츠 결제 승인
+├── admin/          # 관리자 콘솔 (/admin)
+├── api/payments/   # Vercel 서버 함수: confirm.js(결제 승인), cancel.js(관리자 환불)
 ├── supabase/schema.sql       # DB 테이블 + 보안 정책(RLS)
 ├── index.html      # 메인 페이지
 ├── 404.html        # 없는 주소로 들어왔을 때 보이는 페이지

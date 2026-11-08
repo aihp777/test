@@ -30,7 +30,7 @@ import { startPayment } from "/assets/js/pay.js";
 
 await renderHeader();
 const me = await requireLogin();
-if (me.role === "admin") { location.href = "/platform/admin"; }
+if (me.role === "admin") { location.href = "/admin/"; }
 const vendor = me.role === "vendor" ? await store.myVendor() : null;
 const statusTone = { open: "teal", matched: "navy", paid: "ok", in_progress: "ok", completed: "", canceled: "bad" };
 const rBadge = (s) => badge(REQUEST_STATUS[s] || s, statusTone[s]);

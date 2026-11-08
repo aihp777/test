@@ -72,7 +72,7 @@ export async function renderHeader() {
         <a href="/platform/vendors">업체 찾기</a>
         <a href="/platform/vendor-join">업체 등록</a>
         ${me ? `<a href="/platform/dashboard">마이페이지</a>` : ""}
-        ${me && me.role === "admin" ? `<a href="/platform/admin">관리자</a>` : ""}
+        ${me && me.role === "admin" ? `<a href="/admin/">관리자 콘솔</a>` : ""}
         ${me ? `<span class="p-user">${esc(me.name)}님</span><button class="p-link" id="logoutBtn">로그아웃</button>`
              : `<a class="p-btn p-btn-sm" href="/platform/login">로그인 / 회원가입</a>`}
       </nav>

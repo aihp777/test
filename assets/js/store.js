@@ -10,16 +10,16 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v2";
+const DB_KEY = "wg_platform_v3";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
-  const admin = { id: "u-admin", email: "admin@demo.com", password: "demo1234", name: "플랫폼 관리자", phone: "031-945-2001", role: "admin" };
-  const cust = { id: "u-cust", email: "customer@demo.com", password: "demo1234", name: "김고객", phone: "010-1234-5678", role: "customer" };
-  const v1u = { id: "u-v1", email: "vendor@demo.com", password: "demo1234", name: "김정환", phone: "031-945-2001", role: "vendor" };
-  const v2u = { id: "u-v2", email: "vendor2@demo.com", password: "demo1234", name: "이대표", phone: "02-000-0000", role: "vendor" };
-  const v3u = { id: "u-v3", email: "vendor3@demo.com", password: "demo1234", name: "박대표", phone: "032-000-0000", role: "vendor" };
   const t = (d) => new Date(Date.now() - d * 86400000).toISOString();
+  const admin = { id: "u-admin", email: "admin@demo.com", password: "demo1234", name: "플랫폼 관리자", phone: "031-945-2001", role: "admin", created_at: t(400) };
+  const cust = { id: "u-cust", email: "customer@demo.com", password: "demo1234", name: "김고객", phone: "010-1234-5678", role: "customer", created_at: t(60) };
+  const v1u = { id: "u-v1", email: "vendor@demo.com", password: "demo1234", name: "김정환", phone: "031-945-2001", role: "vendor", created_at: t(300) };
+  const v2u = { id: "u-v2", email: "vendor2@demo.com", password: "demo1234", name: "이대표", phone: "02-000-0000", role: "vendor", created_at: t(120) };
+  const v3u = { id: "u-v3", email: "vendor3@demo.com", password: "demo1234", name: "박대표", phone: "032-000-0000", role: "vendor", created_at: t(1) };
   return {
     users: [admin, cust, v1u, v2u, v3u],
     vendors: [
@@ -45,9 +45,32 @@ function seed() {
   };
 }
 
+// 데모용 과거 거래 이력 (관리자 대시보드 차트 확인용)
+function seedHistory(db) {
+  const t = (d) => new Date(Date.now() - d * 86400000).toISOString();
+  const past = [
+    [170, "이주관리·범죄예방", "서울", "재건축 단지 이주관리 3개월", 42000000, "v-1"],
+    [140, "시설경비", "경기", "물류센터 야간 경비 2개월", 9800000, "v-1"],
+    [120, "혼잡·교통유도", "서울", "콘서트 관객 동선 관리", 7200000, "v-2"],
+    [95, "신변보호", "서울", "VIP 행사 근접 경호", 5500000, "v-1"],
+    [80, "시설경비", "인천", "공장 시설경비 1개월", 6300000, "v-1"],
+    [62, "행정대집행지원", "경기", "불법 구조물 철거 지원", 15000000, "v-1"],
+    [45, "혼잡·교통유도", "경기", "지역 축제 교통유도", 4800000, "v-2"],
+    [30, "청소대행", "서울", "오피스 빌딩 정밀 청소", 3900000, "v-1"],
+    [12, "시설경비", "부산", "리조트 성수기 시설경비", 11200000, "v-1"],
+  ];
+  past.forEach(([ago, category, region, title, amount, vid], i) => {
+    const rid = "r-h" + i, qid = "q-h" + i, v = db.vendors.find((x) => x.id === vid);
+    db.requests.push({ id: rid, customer_id: "u-cust", customer_name: "김고객", category, region, title, details: "(데모 과거 거래)", service_date: t(ago - 7).slice(0, 10), budget: null, target_vendor_id: null, photos: [], status: "completed", selected_quote_id: qid, created_at: t(ago) });
+    db.quotes.push({ id: qid, request_id: rid, vendor_id: vid, vendor_company: v.company, amount, message: "(데모)", status: "accepted", created_at: t(ago - 1) });
+    db.payments.push({ id: "p-h" + i, order_id: "WGDEMO" + (1000 + i), request_id: rid, quote_id: qid, customer_id: "u-cust", vendor_id: vid, amount, fee: Math.round(amount * 0.1), status: "paid", payment_key: "DEMO", created_at: t(ago - 2), paid_at: t(ago - 2), order_name: `[${category}] ${title}`, settlement_status: ago > 40 ? "settled" : "pending", settled_at: ago > 40 ? t(ago - 20) : null });
+  });
+  return db;
+}
+
 const load = () => {
   try { const d = JSON.parse(localStorage.getItem(DB_KEY)); if (d) return d; } catch (e) {}
-  const d = seed(); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
+  const d = seedHistory(seed()); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
 };
 const save = (d) => {
   try { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
@@ -69,7 +92,7 @@ const demo = {
   async signUp({ email, password, name, phone, role }) {
     const d = load();
     if (d.users.some((u) => u.email === email)) throw new Error("이미 가입된 이메일입니다.");
-    const u = { id: uid(), email, password, name, phone, role: role === "vendor" ? "vendor" : "customer" };
+    const u = { id: uid(), email, password, name, phone, role: role === "vendor" ? "vendor" : "customer", created_at: now() };
     d.users.push(u); save(d); localStorage.setItem(SESSION_KEY, u.id); return strip(u);
   },
   async signIn(email, password) {
@@ -181,6 +204,25 @@ const demo = {
     if (me.role === "admin") return d.payments.sort(byNewest);
     const v = d.vendors.find((x) => x.owner_id === me.id);
     return d.payments.filter((p) => p.customer_id === me.id || (v && p.vendor_id === v.id)).sort(byNewest);
+  },
+
+  // --- admin
+  async listUsers() { return load().users.map(strip).map((u) => ({ created_at: u.created_at || "2025-01-01T00:00:00Z", ...u })); },
+  async setUserRole(id, role) { const d = load(); const u = d.users.find((x) => x.id === id); u.role = role; save(d); return strip(u); },
+  async updateVendorAdmin(id, patch) { const d = load(); const v = d.vendors.find((x) => x.id === id); Object.assign(v, patch); save(d); return v; },
+  async listAllQuotes() { return load().quotes.sort(byNewest); },
+  async settlePayment(id) {
+    const d = load(); const p = d.payments.find((x) => x.id === id);
+    if (p.status !== "paid") throw new Error("결제 완료 건만 정산할 수 있습니다.");
+    p.settlement_status = "settled"; p.settled_at = now(); save(d); return p;
+  },
+  async refundPayment(id, reason) {
+    const d = load(); const p = d.payments.find((x) => x.id === id);
+    if (p.status !== "paid") throw new Error("결제 완료 건만 환불할 수 있습니다.");
+    if (p.settlement_status === "settled") throw new Error("이미 정산된 건입니다.");
+    p.status = "refunded"; p.refund_reason = reason; p.refunded_at = now();
+    const r = d.requests.find((x) => x.id === p.request_id); if (r) r.status = "canceled";
+    save(d); return p;
   },
 };
 
@@ -300,6 +342,27 @@ const supa = {
   async completeDemoPayment() { throw new Error("운영 모드에서는 실제 결제를 이용하세요."); },
   async getPaymentByOrder(order_id) { const c = await client(); return ok(await c.from("payments").select("*").eq("order_id", order_id).maybeSingle()); },
   async listPayments() { const c = await client(); return ok(await c.from("payments").select("*").order("created_at", { ascending: false })); },
+
+  // --- admin (RLS: is_admin() 정책 필요 - schema.sql)
+  async listUsers() { const c = await client(); return ok(await c.from("profiles").select("*").order("created_at", { ascending: false })); },
+  async setUserRole(id, role) { const c = await client(); return ok(await c.from("profiles").update({ role }).eq("id", id).select().single()); },
+  async updateVendorAdmin(id, patch) { const c = await client(); return ok(await c.from("vendors").update(patch).eq("id", id).select().single()); },
+  async listAllQuotes() { const c = await client(); return ok(await c.from("quotes").select("*").order("created_at", { ascending: false })); },
+  async settlePayment(id) {
+    const c = await client();
+    return ok(await c.from("payments").update({ settlement_status: "settled", settled_at: now() }).eq("id", id).eq("status", "paid").select().single());
+  },
+  async refundPayment(id, reason) {
+    const c = await client(); const { data } = await c.auth.getSession();
+    const res = await fetch("/api/payments/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + data.session.access_token },
+      body: JSON.stringify({ paymentId: id, reason }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || "환불 처리에 실패했습니다.");
+    return body.payment;
+  },
 };
 
 export const store = IS_DEMO ? demo : supa;
