@@ -1,0 +1,10 @@
+{
+  "name": "widegard-homepage",
+  "version": "1.0.0",
+  "private": true,
+  "description": "(주)와이드가드 회사 홈페이지 (정적 사이트)",
+  "scripts": {
+    "dev": "npx --yes serve . -l 3000",
+    "deploy": "npx --yes vercel --prod"
+  }
+}
