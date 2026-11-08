@@ -24,7 +24,7 @@
   </div>
 </main>
 <script type="module">
-import { renderHeader, requireLogin, $, $$, esc, won, date, datetime, badge, qs, toast, store } from "/assets/js/ui.js";
+import { renderHeader, requireLogin, $, $$, esc, won, date, datetime, badge, qs, toast, renderPhotos, store } from "/assets/js/ui.js";
 import { REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS } from "/assets/js/config.js";
 import { startPayment } from "/assets/js/pay.js";
 
@@ -72,7 +72,9 @@ const requestInfo = (r) => `
     <dt>요청자</dt><dd>${esc(r.customer_name)}</dd>
     <dt>등록일</dt><dd>${date(r.created_at)}</dd>
   </dl>
-  <p style="white-space:pre-wrap;background:var(--bg);padding:14px;border-radius:10px">${esc(r.details)}</p>`;
+  <p style="white-space:pre-wrap;background:var(--bg);padding:14px;border-radius:10px">${esc(r.details)}</p>
+  <div class="req-photos" data-req="${r.id}"></div>`;
+const fillPhotos = (r) => renderPhotos(document.querySelector(`.req-photos[data-req="${r.id}"]`), r);
 
 // ---------- CUSTOMER ----------
 async function customerView() {
@@ -92,7 +94,7 @@ async function requestsTab(selectId = qs("request")) {
   $("#rlist").innerHTML = rs.map((r) => `
     <div class="item" data-id="${r.id}">
       <div class="flex between"><h3>${esc(r.title)}</h3></div>
-      <div class="meta">${esc(r.category)} · ${esc(r.region)} · ${date(r.created_at)}</div>
+      <div class="meta">${esc(r.category)} · ${esc(r.region)} · ${date(r.created_at)}${r.photos?.length ? ` · 📷 ${r.photos.length}` : ""}</div>
       <div class="flex mt" style="margin-top:8px">${rBadge(r.status)} <span class="badge">견적 ${counts[r.id]}건</span></div>
     </div>`).join("");
   $$("#rlist .item").forEach((el) => (el.onclick = () => showCustomerRequest(el.dataset.id)));
@@ -131,6 +133,7 @@ async function showCustomerRequest(id) {
       <div class="threads" id="threads">${threads.map((v) => `<button data-chat="${v.id}" data-name="${esc(v.company)}">${esc(v.company)}</button>`).join("") || (target ? `<button data-chat="${target.id}" data-name="${esc(target.company)}">${esc(target.company)}</button>` : "")}</div>
       <div id="chatBox"><p class="muted">견적을 보낸 업체와 1:1 상담을 할 수 있습니다.</p></div>
     </div>`;
+  fillPhotos(r);
   const openChat = (vid, name) => { $$("#threads button").forEach((b) => b.classList.toggle("on", b.dataset.chat === vid)); renderChat($("#chatBox"), r, vid, name); };
   $$("[data-chat]").forEach((b) => (b.onclick = () => openChat(b.dataset.chat, b.dataset.name)));
   const first = sel ? sel.vendor_id : (threads[0]?.id || target?.id);
@@ -180,7 +183,7 @@ async function matchTab(selectId = qs("request")) {
   $("#rlist").innerHTML = rs.map((r) => `
     <div class="item" data-id="${r.id}">
       <h3>${esc(r.title)}</h3>
-      <div class="meta">${esc(r.category)} · ${esc(r.region)} · ${esc(r.service_date)}</div>
+      <div class="meta">${esc(r.category)} · ${esc(r.region)} · ${esc(r.service_date)}${r.photos?.length ? ` · 📷 ${r.photos.length}` : ""}</div>
       <div class="flex" style="margin-top:8px">${rBadge(r.status)} ${r.target_vendor_id ? badge("지정 요청", "navy") : ""} ${qBy[r.id] ? badge("견적 " + QUOTE_STATUS[qBy[r.id].status], qBy[r.id].status === "accepted" ? "ok" : "") : badge("미제출", "warn")}</div>
     </div>`).join("");
   $$("#rlist .item").forEach((el) => (el.onclick = () => showVendorRequest(el.dataset.id, qBy[el.dataset.id])));
@@ -205,6 +208,7 @@ async function showVendorRequest(id, myQuote) {
       </form>` : `<p class="muted mt">${myQuote?.status === "accepted" ? (r.status === "matched" ? "선정되었습니다. 고객 결제를 기다리고 있습니다." : r.status === "paid" ? "결제가 완료되었습니다. 서비스를 진행해 주세요." : "") : "견적 모집이 종료되었습니다."}</p>`}
     </div>
     <div class="card"><h2>고객 상담</h2><div id="chatBox"></div></div>`;
+  fillPhotos(r);
   renderChat($("#chatBox"), r, vendor.id, r.customer_name + " 고객님");
   const f = $("#qForm");
   if (f) f.onsubmit = async (e) => {

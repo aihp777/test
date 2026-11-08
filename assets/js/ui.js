@@ -14,6 +14,45 @@ export const badge = (label, tone = "") => `<span class="badge ${tone}">${esc(la
 export { CATEGORIES, REGIONS, store };
 export { regionLabel } from "./config.js";
 
+// ---------- 이미지 ----------
+// 업로드 전 브라우저에서 리사이즈/압축 (EXIF 회전 반영)
+export async function resizeImage(file, max = 1600, quality = 0.82) {
+  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
+  if (!bmp) throw new Error(`${file.name}: 이미지를 읽을 수 없습니다.`);
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob((b) => res(b), "image/jpeg", quality));
+}
+export const blobToDataURL = (b) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
+
+// 요청의 현장 사진을 지정한 요소에 썸네일로 렌더링 + 클릭 시 크게 보기
+export async function renderPhotos(el, request) {
+  if (!el || !request.photos || !request.photos.length) return;
+  const urls = await store.getPhotoUrls(request);
+  el.innerHTML = `<p class="photo-title">현장 사진 ${urls.length}장</p><div class="photo-grid">${urls.map((u, i) => `<button type="button" class="photo-thumb" data-i="${i}"><img src="${esc(u)}" alt="현장 사진 ${i + 1}" loading="lazy"></button>`).join("")}</div>`;
+  el.querySelectorAll(".photo-thumb").forEach((b) => (b.onclick = () => openLightbox(urls, +b.dataset.i)));
+}
+export function openLightbox(urls, i = 0) {
+  let lb = $("#lightbox");
+  if (!lb) { lb = document.createElement("div"); lb.id = "lightbox"; document.body.appendChild(lb); }
+  const draw = () => {
+    lb.innerHTML = `<button class="lb-close" aria-label="닫기">✕</button>
+      ${urls.length > 1 ? `<button class="lb-nav lb-prev" aria-label="이전">‹</button><button class="lb-nav lb-next" aria-label="다음">›</button>` : ""}
+      <img src="${esc(urls[i])}" alt="현장 사진 ${i + 1}"><span class="lb-count">${i + 1} / ${urls.length}</span>`;
+    lb.querySelector(".lb-close").onclick = close;
+    const p = lb.querySelector(".lb-prev"), n = lb.querySelector(".lb-next");
+    if (p) p.onclick = (e) => { e.stopPropagation(); i = (i - 1 + urls.length) % urls.length; draw(); };
+    if (n) n.onclick = (e) => { e.stopPropagation(); i = (i + 1) % urls.length; draw(); };
+  };
+  const close = () => { lb.classList.remove("show"); document.removeEventListener("keydown", key); };
+  const key = (e) => { if (e.key === "Escape") close(); if (e.key === "ArrowLeft") lb.querySelector(".lb-prev")?.click(); if (e.key === "ArrowRight") lb.querySelector(".lb-next")?.click(); };
+  lb.onclick = (e) => { if (e.target === lb) close(); };
+  document.addEventListener("keydown", key);
+  draw(); lb.classList.add("show");
+}
+
 export function toast(msg, tone = "") {
   let el = $("#toast");
   if (!el) { el = document.createElement("div"); el.id = "toast"; document.body.appendChild(el); }

@@ -49,7 +49,12 @@ const load = () => {
   try { const d = JSON.parse(localStorage.getItem(DB_KEY)); if (d) return d; } catch (e) {}
   const d = seed(); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
 };
-const save = (d) => localStorage.setItem(DB_KEY, JSON.stringify(d));
+const save = (d) => {
+  try { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+  catch (e) { throw new Error("데모 저장 공간(브라우저)이 가득 찼습니다. 사진 수를 줄이거나 상단의 '데모 데이터 초기화'를 눌러주세요."); }
+};
+const blobToDataURL = (b) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
+const PHOTO_BUCKET = "request-photos";
 const strip = (u) => { if (!u) return null; const { password, ...rest } = u; return rest; };
 const byNewest = (a, b) => (a.created_at < b.created_at ? 1 : -1);
 
@@ -98,12 +103,14 @@ const demo = {
   async setVendorStatus(id, status) { const d = load(); const v = d.vendors.find((x) => x.id === id); v.status = status; save(d); return v; },
 
   // --- requests
-  async createRequest(data) {
+  async createRequest(data, photos = []) {
     const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
     const d = load();
-    const r = { id: uid(), customer_id: me.id, customer_name: me.name, status: "open", selected_quote_id: null, target_vendor_id: null, created_at: now(), ...data };
+    const urls = await Promise.all(photos.map(blobToDataURL));
+    const r = { id: uid(), customer_id: me.id, customer_name: me.name, status: "open", selected_quote_id: null, target_vendor_id: null, created_at: now(), ...data, photos: urls };
     d.requests.push(r); save(d); return r;
   },
+  async getPhotoUrls(r) { return r.photos || []; },
   async getRequest(id) { return load().requests.find((r) => r.id === id) || null; },
   async listMyRequests() { const me = await this.currentUser(); return load().requests.filter((r) => r.customer_id === me.id).sort(byNewest); },
   async listMatchedRequests() {
@@ -228,9 +235,26 @@ const supa = {
   },
   async setVendorStatus(id, status) { const c = await client(); return ok(await c.from("vendors").update({ status }).eq("id", id).select().single()); },
 
-  async createRequest(data) {
+  async createRequest(data, photos = []) {
     const c = await client(); const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
-    return ok(await c.from("requests").insert({ ...data, customer_id: me.id, customer_name: me.name }).select().single());
+    const paths = [];
+    try {
+      for (const b of photos) {
+        const path = `${me.id}/${uid()}.jpg`;
+        ok(await c.storage.from(PHOTO_BUCKET).upload(path, b, { contentType: "image/jpeg", upsert: false }));
+        paths.push(path);
+      }
+      return ok(await c.from("requests").insert({ ...data, photos: paths, customer_id: me.id, customer_name: me.name }).select().single());
+    } catch (e) {
+      if (paths.length) await c.storage.from(PHOTO_BUCKET).remove(paths);
+      throw e;
+    }
+  },
+  async getPhotoUrls(r) {
+    if (!r.photos || !r.photos.length) return [];
+    const c = await client();
+    const data = ok(await c.storage.from(PHOTO_BUCKET).createSignedUrls(r.photos, 3600));
+    return data.filter((x) => x.signedUrl).map((x) => x.signedUrl);
   },
   async getRequest(id) { const c = await client(); return ok(await c.from("requests").select("*").eq("id", id).maybeSingle()); },
   async listMyRequests() { const c = await client(); const me = await this.currentUser(); return ok(await c.from("requests").select("*").eq("customer_id", me.id).order("created_at", { ascending: false })); },

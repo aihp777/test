@@ -23,14 +23,23 @@
         <div class="field"><label>예산 (원)</label><input type="number" name="budget" min="0" step="10000" placeholder="협의 가능하면 비워두세요"></div>
       </div>
       <div class="field"><label>상세 내용<em>*</em></label><textarea name="details" required placeholder="장소, 기간, 필요 인원, 근무 시간, 특이사항 등을 적어주세요."></textarea></div>
-      <button class="p-btn" style="width:100%">견적 요청하기</button>
+      <div class="field">
+        <label>현장 사진 <span class="muted" style="font-weight:500">(선택 · 최대 5장)</span></label>
+        <label class="uploader" id="drop">
+          <input type="file" id="files" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple>
+          📷 <b>사진 선택</b> 또는 여기로 끌어다 놓기<br><small>현장 전경, 출입구, 주차장 등 사진이 있으면 더 정확한 견적을 받을 수 있습니다. (JPG·PNG·WEBP, 장당 15MB 이하)</small>
+        </label>
+        <div class="previews" id="previews"></div>
+        <small>사진은 견적 요청을 받는 업체에게만 공개됩니다. 개인정보(얼굴, 차량번호 등)가 나오지 않도록 주의해 주세요.</small>
+      </div>
+      <button class="p-btn" style="width:100%" id="submitBtn">견적 요청하기</button>
       <p class="muted mt" style="font-size:13px">요청 후 마이페이지에서 받은 견적을 비교하고 업체와 상담할 수 있습니다.</p>
     </form>
   </div>
 </main>
 <script type="module">
-import { renderHeader, requireLogin, $, esc, options, qs, toast, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
-import { NATIONWIDE } from "/assets/js/config.js";
+import { renderHeader, requireLogin, $, $$, esc, options, qs, toast, resizeImage, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
+import { NATIONWIDE, IS_DEMO } from "/assets/js/config.js";
 await renderHeader();
 await requireLogin();
 const regionOptions = (list, sel) => `<option value="">선택</option>` +
@@ -50,15 +59,42 @@ if (vid) {
     $("#reg").innerHTML = regionOptions(vendor.regions, qs("region") || "");
   }
 }
+// ---------- 현장 사진 ----------
+const MAX_FILES = 5, MAX_MB = 15;
+const [MAX_PX, QUALITY] = IS_DEMO ? [1024, 0.7] : [1600, 0.82]; // 데모는 브라우저 저장 공간 절약
+let photos = []; // { blob, url }
+const drawPreviews = () => {
+  $("#previews").innerHTML = photos.map((p, i) => `<div class="pv"><img src="${p.url}" alt="첨부 사진 ${i + 1}"><button type="button" class="rm" data-i="${i}" aria-label="삭제">✕</button></div>`).join("");
+  $$("#previews .rm").forEach((b) => (b.onclick = () => { URL.revokeObjectURL(photos[b.dataset.i].url); photos.splice(+b.dataset.i, 1); drawPreviews(); }));
+};
+async function addFiles(list) {
+  for (const file of list) {
+    if (photos.length >= MAX_FILES) { toast(`사진은 최대 ${MAX_FILES}장까지 첨부할 수 있습니다.`, "bad"); break; }
+    if (!file.type.startsWith("image/") && !/\.(heic|heif)$/i.test(file.name)) { toast(`${file.name}: 이미지 파일만 첨부할 수 있습니다.`, "bad"); continue; }
+    if (file.size > MAX_MB * 1024 * 1024) { toast(`${file.name}: ${MAX_MB}MB 이하만 첨부할 수 있습니다.`, "bad"); continue; }
+    try { const blob = await resizeImage(file, MAX_PX, QUALITY); photos.push({ blob, url: URL.createObjectURL(blob) }); }
+    catch (err) { toast(err.message, "bad"); }
+  }
+  drawPreviews();
+}
+$("#files").onchange = (e) => { addFiles([...e.target.files]); e.target.value = ""; };
+const drop = $("#drop");
+["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
+["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
+drop.addEventListener("drop", (e) => addFiles([...e.dataTransfer.files]));
+
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
+  delete f.files;
   f.budget = f.budget ? Number(f.budget) : null;
   f.target_vendor_id = vendor ? vendor.id : null;
+  const btn = $("#submitBtn");
+  btn.disabled = true; btn.textContent = photos.length ? "사진 업로드 중..." : "요청 중...";
   try {
-    const r = await store.createRequest(f);
+    const r = await store.createRequest(f, photos.map((p) => p.blob));
     location.href = "/platform/dashboard?request=" + r.id + "&new=1";
-  } catch (err) { toast(err.message, "bad"); }
+  } catch (err) { toast(err.message, "bad"); btn.disabled = false; btn.textContent = "견적 요청하기"; }
 };
 </script>
 </body>

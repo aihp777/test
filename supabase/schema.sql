@@ -66,6 +66,7 @@ create table if not exists public.requests (
   service_date date not null,
   budget bigint,
   target_vendor_id uuid references public.vendors(id) on delete set null,
+  photos text[] not null default '{}',
   status text not null default 'open' check (status in ('open', 'matched', 'paid', 'in_progress', 'completed', 'canceled')),
   selected_quote_id uuid,
   created_at timestamptz not null default now()
@@ -120,6 +121,7 @@ create table if not exists public.settings (
 );
 insert into public.settings (id, fee_rate) values (1, 0.1) on conflict (id) do nothing;
 
+alter table public.requests add column if not exists photos text[] not null default '{}';  -- 기존 DB 업그레이드용
 create index if not exists idx_requests_match on public.requests (status, category, region);
 create index if not exists idx_quotes_request on public.quotes (request_id);
 create index if not exists idx_messages_thread on public.messages (request_id, vendor_id, created_at);
@@ -230,7 +232,10 @@ create policy "requests read" on public.requests for select using (
   ))
 );
 drop policy if exists "requests insert" on public.requests;
-create policy "requests insert" on public.requests for insert with check (customer_id = auth.uid() and status = 'open');
+create policy "requests insert" on public.requests for insert with check (
+  customer_id = auth.uid() and status = 'open'
+  and not exists (select 1 from unnest(photos) p where p not like auth.uid()::text || '/%')  -- 본인이 올린 사진만 첨부
+);
 drop policy if exists "requests update" on public.requests;
 create policy "requests update" on public.requests for update using (customer_id = auth.uid() or public.is_admin())
   with check (public.is_admin() or status in ('canceled', 'completed'));
@@ -269,6 +274,37 @@ drop policy if exists "settings read" on public.settings;
 create policy "settings read" on public.settings for select using (true);
 drop policy if exists "settings admin" on public.settings;
 create policy "settings admin" on public.settings for update using (public.is_admin());
+
+-- =============================================================
+--  현장 사진 (Supabase Storage, 비공개 버킷)
+--  - 경로: {업로더 user id}/{uuid}.jpg
+--  - 업로드: 로그인 사용자가 자기 폴더에만 (jpg, 10MB 이하)
+--  - 열람: 해당 사진이 첨부된 요청을 조회할 수 있는 사람만 (requests RLS 를 그대로 따름)
+-- =============================================================
+alter table public.requests add column if not exists photos text[] not null default '{}';
+alter table public.requests drop constraint if exists requests_photos_max;
+alter table public.requests add constraint requests_photos_max check (coalesce(array_length(photos, 1), 0) <= 5);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('request-photos', 'request-photos', false, 10485760, array['image/jpeg'])
+on conflict (id) do update set public = false, file_size_limit = 10485760, allowed_mime_types = array['image/jpeg'];
+
+drop policy if exists "request photos upload" on storage.objects;
+create policy "request photos upload" on storage.objects for insert to authenticated
+  with check (bucket_id = 'request-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "request photos delete own" on storage.objects;
+create policy "request photos delete own" on storage.objects for delete to authenticated
+  using (bucket_id = 'request-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "request photos read" on storage.objects;
+create policy "request photos read" on storage.objects for select to authenticated
+  using (
+    bucket_id = 'request-photos' and (
+      (storage.foldername(name))[1] = auth.uid()::text
+      or exists (select 1 from public.requests r where name = any (r.photos))  -- requests RLS 적용됨
+    )
+  );
 
 -- =============================================================
 --  관리자 지정: 가입 후 아래 이메일을 바꿔 실행하세요.

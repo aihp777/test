@@ -11,7 +11,7 @@
 |---|---|---|
 | 플랫폼 메인 | `/platform/` | 빠른 견적 요청, 서비스 분야, 추천 업체 |
 | 로그인/회원가입 | `/platform/login` | 고객 / 업체 회원가입, 로그인 |
-| 견적 요청 | `/platform/request` | 분야·지역·일정·예산·내용 입력 (특정 업체 지정 요청 가능) |
+| 견적 요청 | `/platform/request` | 분야·지역·일정·예산·내용 입력, 현장 사진 최대 5장 첨부 (특정 업체 지정 요청 가능) |
 | 업체 찾기 | `/platform/vendors` | 분야·지역·키워드 검색, 업체 상세, 지정 견적 요청 |
 | 업체 등록 | `/platform/vendor-join` | 동종업체 등록 신청 (사업자번호, 허가, 분야, 지역) → 관리자 승인 |
 | 마이페이지(고객) | `/platform/dashboard` | 받은 견적 비교, 업체별 1:1 상담, 업체 선정, 결제, 완료 확인 |
@@ -29,7 +29,7 @@
 ### 운영 모드로 전환하기
 1. **Supabase** (DB·회원 관리, 무료 플랜 가능)
    1. https://supabase.com 에서 프로젝트 생성
-   2. SQL Editor에 `supabase/schema.sql` 전체를 붙여넣고 Run
+   2. SQL Editor에 `supabase/schema.sql` 전체를 붙여넣고 Run (현장 사진용 비공개 Storage 버킷 `request-photos`도 함께 생성됨)
    3. Project Settings → API의 `Project URL`, `anon public` 키를 `assets/js/config.js`에 입력
    4. 관리자 계정: 사이트에서 가입한 뒤 `schema.sql` 맨 아래 주석의 SQL로 role을 admin으로 변경
 2. **토스페이먼츠** (결제)
