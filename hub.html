@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>(주)와이드가드 · 통합 바로가기</title>
+<meta name="robots" content="noindex">
+<meta name="description" content="(주)와이드가드 홈페이지 · 매칭 플랫폼 · 관리자 콘솔을 한곳에서 바로 열 수 있는 통합 바로가기">
+<meta property="og:type" content="website">
+<meta property="og:title" content="(주)와이드가드 홈페이지 · 매칭 플랫폼 시안 — 통합 바로가기">
+<meta property="og:description" content="회사 홈페이지, 견적 매칭 플랫폼, 비회원 견적문의, 관리자 콘솔, 데모 안내를 한곳에서 확인하세요.">
+<meta property="og:url" content="https://3w4ertd4w3.vercel.app/hub">
+<meta property="og:image" content="https://3w4ertd4w3.vercel.app/images/og-image.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+<style>
+  .hub-hero { background: radial-gradient(circle at 85% 0%, rgba(20,188,184,.32), transparent 45%), var(--navy-deep); color: #fff; padding: 46px 0 70px; }
+  .hub-hero .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .hub-hero .brand img { width: 46px; }
+  .hub-hero .brand b { display: block; font-size: 18px; letter-spacing: .05em; }
+  .hub-hero .brand small { opacity: .7; font-size: 12.5px; }
+  .hub-hero h1 { font-size: clamp(24px, 4.4vw, 36px); line-height: 1.3; letter-spacing: -.02em; }
+  .hub-hero p { opacity: .82; margin-top: 10px; font-size: 15.5px; }
+  .hub-wrap { margin-top: -44px; padding-bottom: 40px; }
+  .hub-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .tile { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(11,24,56,.06); transition: transform .15s, box-shadow .15s; }
+  .tile:hover { transform: translateY(-3px); box-shadow: 0 14px 32px rgba(11,24,56,.12); }
+  .tile .ico { width: 46px; height: 46px; border-radius: 12px; background: var(--grad); display: grid; place-items: center; font-size: 22px; }
+  .tile h2 { font-size: 17.5px; color: var(--navy); margin-top: 4px; }
+  .tile p { font-size: 13.5px; color: var(--muted); flex: 1; line-height: 1.6; }
+  .tile .url { font-size: 12px; color: #8a93a3; word-break: break-all; font-family: ui-monospace, Consolas, monospace; }
+  .tile .acts { display: flex; gap: 6px; margin-top: 6px; }
+  .tile .acts .p-btn { flex: 1; padding: 10px 12px; font-size: 14px; }
+  .tile .acts button.p-btn-line { flex: 0 0 auto; }
+  .tile.main { grid-column: span 3; flex-direction: row; align-items: center; gap: 20px; background: linear-gradient(135deg, #f0fbfb, #eef3fb); border-color: #cfe9e8; }
+  .tile.main .body { flex: 1; }
+  .tile.main .acts { margin-top: 0; }
+  .tag { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 6px; background: #eef1f6; color: var(--navy); margin-left: 6px; vertical-align: middle; }
+  .info { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .info .card { padding: 22px; }
+  .info h3 { font-size: 16px; color: var(--navy); margin-bottom: 10px; }
+  .info table { width: 100%; font-size: 13.5px; border-collapse: collapse; }
+  .info td { padding: 6px 0; border-bottom: 1px solid #f0f2f6; }
+  .info td:first-child { color: var(--muted); width: 38%; }
+  .info li { font-size: 13.5px; line-height: 1.9; }
+  @media (max-width: 900px) { .hub-grid { grid-template-columns: 1fr 1fr; } .tile.main { grid-column: span 2; } }
+  @media (max-width: 620px) { .hub-grid, .info { grid-template-columns: 1fr; } .tile.main { grid-column: auto; flex-direction: column; align-items: stretch; } }
+</style>
+</head>
+<body>
+<section class="hub-hero">
+  <div class="p-container" style="max-width:1080px">
+    <div class="brand"><img src="/images/logo-white.png" alt=""><span><b>WIDE GUARD</b><small>(주)와이드가드</small></span></div>
+    <h1>홈페이지 · 매칭 플랫폼 시안<br>통합 바로가기</h1>
+    <p>회사 홈페이지부터 견적 매칭, 비회원 문의, 관리자 콘솔까지 한곳에서 열고 공유할 수 있습니다.</p>
+  </div>
+</section>
+<main>
+  <div class="p-container hub-wrap" style="max-width:1080px">
+    <div class="hub-grid" id="grid"></div>
+    <div class="info">
+      <div class="card">
+        <h3>🔑 데모 계정 <span class="muted" style="font-size:13px;font-weight:500">(비밀번호 모두 demo1234)</span></h3>
+        <table>
+          <tr><td>관리자 · 김정환 대표이사</td><td>admin@demo.com</td></tr>
+          <tr><td>관리자 · 김종연 사내이사</td><td>admin2@demo.com</td></tr>
+          <tr><td>고객</td><td>customer@demo.com</td></tr>
+          <tr><td>업체 (와이드가드)</td><td>vendor@demo.com</td></tr>
+        </table>
+        <p class="muted" style="font-size:12.5px;margin-top:10px">로그인 화면의 '데모 계정' 버튼이나 '데모 확인 방법' 페이지의 버튼을 누르면 바로 들어가집니다.</p>
+      </div>
+      <div class="card">
+        <h3>ℹ️ 안내</h3>
+        <ul style="margin-left:18px">
+          <li>현재 <b>시안(데모) 단계</b>입니다. 입력한 데이터는 각자의 휴대폰·PC 브라우저에만 저장됩니다.</li>
+          <li>결제는 테스트 결제이며, 인증번호·알림 문자는 실제로 발송되지 않습니다.</li>
+          <li>처음 상태로 되돌리려면 플랫폼 상단 노란 띠의 '데모 데이터 초기화'를 누르세요.</li>
+          <li>문의: (주)와이드가드 031-945-2001</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</main>
+<footer class="p-footer" style="margin-top:20px"><div class="p-container">주식회사 와이드가드 · 대표 김정환 · 경기도 김포시 풍무2로 25, 2층 2-2호 · T. 031-945-2001</div></footer>
+<div id="toast"></div>
+<script type="module">
+import { mountShareButton, sharePage } from "/assets/js/share.js";
+const O = location.origin;
+const LINKS = [
+  { main: true, ico: "🧭", title: "데모 확인 방법", tag: "처음이라면 여기부터", path: "/demo",
+    desc: "버튼 한 번으로 김정환 대표이사 · 김종연 사내이사 · 비회원 · 고객 · 업체 화면에 바로 들어가 주요 기능을 순서대로 체험합니다." },
+  { ico: "🏢", title: "회사 홈페이지", path: "/", desc: "회사 소개, 사업 분야, 주요 실적, 경쟁력, 현장 사진, 문의 안내" },
+  { ico: "🤝", title: "매칭 플랫폼", path: "/platform", desc: "경비·경호·이주관리 견적을 한 번에 비교 — 업체 찾기, 업체 등록, 마이페이지" },
+  { ico: "📝", title: "견적 요청", tag: "회원·비회원", path: "/platform/request", desc: "회원은 로그인 후, 비회원은 성함·휴대폰 인증만으로 견적문의. 현장 사진 첨부 가능" },
+  { ico: "🔎", title: "비회원 문의 조회", path: "/platform/inquiry-status", desc: "휴대폰 인증으로 문의 진행 상황과 업체가 보낸 견적을 확인" },
+  { ico: "🛡️", title: "관리자 콘솔", tag: "관리자 전용", path: "/admin", desc: "공동 업무함(대표·이사 동시 확인), 업체 승인, 견적·결제·정산, 나라장터 입찰 관리" },
+];
+const toast = (m) => { const t = document.getElementById("toast"); t.textContent = m; t.className = "show"; clearTimeout(t._h); t._h = setTimeout(() => (t.className = ""), 2200); };
+document.getElementById("grid").innerHTML = LINKS.map((l, i) => {
+  const url = O + l.path;
+  const body = `<div class="ico">${l.ico}</div>
+    <div class="body"><h2>${l.title}${l.tag ? `<span class="tag">${l.tag}</span>` : ""}</h2><p>${l.desc}</p><div class="url">${url}</div></div>`;
+  return `<div class="tile ${l.main ? "main" : ""}">${body}
+    <div class="acts"><a class="p-btn" href="${l.path}" target="_blank" rel="noopener">열기</a>
+      <button class="p-btn p-btn-line" data-copy="${i}" title="링크 복사">복사</button>
+      <button class="p-btn p-btn-line" data-share="${i}" title="공유">공유</button></div></div>`;
+}).join("");
+document.querySelectorAll("[data-copy]").forEach((b) => (b.onclick = async () => {
+  const l = LINKS[b.dataset.copy];
+  try { await navigator.clipboard.writeText(O + l.path); toast(`'${l.title}' 링크를 복사했습니다.`); } catch { prompt("링크를 복사하세요", O + l.path); }
+}));
+document.querySelectorAll("[data-share]").forEach((b) => (b.onclick = () => {
+  const l = LINKS[b.dataset.share];
+  sharePage({ title: `(주)와이드가드 · ${l.title}`, text: `(주)와이드가드 ${l.title}`, url: O + l.path });
+}));
+mountShareButton({ title: "(주)와이드가드 · 통합 바로가기", text: "[(주)와이드가드 홈페이지 · 매칭 플랫폼 시안] 통합 바로가기", url: O + "/hub" });
+</script>
+</body>
+</html>
