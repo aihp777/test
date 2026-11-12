@@ -12,7 +12,11 @@
 <meta property="og:site_name" content="(주)와이드가드">
 <meta property="og:title" content="(주)와이드가드 | 경비·신변보호·이주관리 전문기업">
 <meta property="og:description" content="고객의 안전과 자산, 와이드가드가 지킵니다. 시설경비 · 신변보호 · 이주관리 · 행정대집행지원 · 청소대행">
-<meta property="og:image" content="/images/og-image.jpg">
+<meta property="og:url" content="https://3w4ertd4w3.vercel.app/">
+<meta property="og:image" content="https://3w4ertd4w3.vercel.app/images/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<link rel="canonical" href="https://3w4ertd4w3.vercel.app/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="images/logo-dark.png" type="image/png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
@@ -430,5 +434,9 @@
 </footer>
 
 <script src="script.js"></script>
+<script type="module">
+import { mountShareButton } from "/assets/js/share.js";
+mountShareButton({ title: "(주)와이드가드", text: "(주)와이드가드 - 시설경비·신변보호·이주관리 전문기업", url: location.origin + "/" });
+</script>
 </body>
 </html>

@@ -4,6 +4,16 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>와이드가드 매칭 | 경비·경호·이주관리 견적 비교 플랫폼</title>
 <meta name="description" content="경비·신변보호·교통유도·이주관리·행정대집행·청소 업체를 한 번에 비교하고 견적을 받아보세요.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="와이드가드 매칭">
+<meta property="og:title" content="와이드가드 매칭 | 경비·경호 견적 한 번에 비교">
+<meta property="og:description" content="시설경비·신변보호·교통유도·이주관리·행정대집행·청소. 한 번의 요청으로 전국 허가 업체의 견적을 비교하고 상담하세요.">
+<meta property="og:url" content="https://3w4ertd4w3.vercel.app/platform">
+<meta property="og:image" content="https://3w4ertd4w3.vercel.app/images/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/images/logo-dark.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
 <link rel="stylesheet" href="/assets/platform.css">
@@ -60,6 +70,7 @@
 <script type="module">
 import { renderHeader, $, esc, options, store, CATEGORIES, REGIONS , regionLabel } from "/assets/js/ui.js";
 await renderHeader();
+import("/assets/js/share.js").then((m) => m.mountShareButton({ title: "와이드가드 매칭", text: "경비·경호 견적, 한 번의 요청으로 여러 업체 비교 - 와이드가드 매칭", url: location.origin + "/platform" }));
 const icons = ["🏢", "🛡️", "🚦", "🏗️", "⚖️", "🧹"];
 $("#qCat").innerHTML = options(CATEGORIES, "", "서비스 선택");
 $("#qReg").innerHTML = options(REGIONS, "", "지역 선택");
