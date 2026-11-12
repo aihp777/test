@@ -27,7 +27,7 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v4";
+const DB_KEY = "wg_platform_v5";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
@@ -37,9 +37,8 @@ function seed() {
   const v1u = { id: "u-v1", email: "vendor@demo.com", password: "demo1234", name: "김정환", phone: "031-945-2001", role: "vendor", created_at: t(300) };
   const v2u = { id: "u-v2", email: "vendor2@demo.com", password: "demo1234", name: "이대표", phone: "02-000-0000", role: "vendor", created_at: t(120) };
   const v3u = { id: "u-v3", email: "vendor3@demo.com", password: "demo1234", name: "박대표", phone: "032-000-0000", role: "vendor", created_at: t(1) };
-  const v4u = { id: "u-v4", email: "vendor4@demo.com", password: "demo1234", name: "최대표", phone: "032-111-0000", role: "vendor", created_at: t(200) };
   return {
-    users: [admin, cust, v1u, v2u, v3u, v4u],
+    users: [admin, cust, v1u, v2u, v3u],
     vendors: [
       { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "000-00-00000", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
         licenses: ["시설경비", "신변보호", "혼잡·교통유도경비"], license_no: "(데모) 허가번호 확인 후 입력", sanitation_no: "", docs: [], is_operator: true,
@@ -51,14 +50,9 @@ function seed() {
       { id: "v-3", owner_id: "u-v3", company: "그린클린(데모)", ceo: "박대표", biz_no: "000-00-00002", phone: "032-000-0000", email: "vendor3@demo.com", address: "인천광역시",
         licenses: [], license_no: "", sanitation_no: "인천 제2026-000호(데모)", docs: [],
         categories: ["청소대행"], regions: ["인천", "경기"], intro: "빌딩·사무실 정밀 청소 (데모 데이터)", license_info: "건물위생관리업 신고", status: "pending", rating: 0, review_count: 0, created_at: t(1) },
-      { id: "v-4", owner_id: "u-v4", company: "국가특수경비(데모)", ceo: "최대표", biz_no: "000-00-00003", phone: "032-111-0000", email: "vendor4@demo.com", address: "인천광역시",
-        licenses: ["특수경비", "시설경비"], license_no: "인천청 제0000호(데모)", sanitation_no: "", docs: [], special_agent: "한빛시큐리티(데모) — 경비대행업자 지정 신고 완료(데모)",
-        categories: ["특수경비", "시설경비"], regions: [NATIONWIDE], intro: "국가중요시설 특수경비 전문 (데모 데이터). 특수경비원 상시 운용.", license_info: "특수경비업 허가증", status: "approved", rating: 4.8, review_count: 22, created_at: t(200) },
     ],
     requests: [
-      { id: "r-1", customer_id: "u-cust", customer_name: "김고객", category: "혼잡·교통유도", region: "경기", title: "가평 야외 축제 교통유도 인력 20명", details: "2일간 진행되는 야외 축제의 주차장·진입로 교통유도 및 현장 질서유지 인력이 필요합니다.", service_date: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), budget: 6000000, target_vendor_id: null, collective_site: "event100", photos: [], status: "open", selected_quote_id: null, created_at: t(2) },
-      { id: "r-2", customer_id: "u-cust", customer_name: "김고객", category: "특수경비", region: "인천", title: "항만 보안구역 특수경비 용역 견적", details: "특수경비원 24시간 3교대 운용 견적 요청. 시설 세부 정보는 선정 업체와 보안서약 후 별도 제공.", service_date: new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10), budget: null, target_vendor_id: null, facility_type: "공항·항만", collective_site: "", photos: [], status: "open", selected_quote_id: null, created_at: t(1) },
-    ],
+      { id: "r-1", customer_id: "u-cust", customer_name: "김고객", category: "혼잡·교통유도", region: "경기", title: "가평 야외 축제 교통유도 인력 20명", details: "2일간 진행되는 야외 축제의 주차장·진입로 교통유도 및 현장 질서유지 인력이 필요합니다.", service_date: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), budget: 6000000, target_vendor_id: null, collective_site: "event100", photos: [], status: "open", selected_quote_id: null, created_at: t(2) },    ],
     quotes: [
       { id: "q-1", request_id: "r-1", vendor_id: "v-2", vendor_company: "한빛시큐리티(데모)", amount: 5800000, message: "경비지도사 1명 포함 20명 투입, 무전기·경광봉 지참합니다.", status: "submitted", created_at: t(1) },
     ],

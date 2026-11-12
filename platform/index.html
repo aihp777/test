@@ -71,11 +71,11 @@
 import { renderHeader, $, esc, options, store, CATEGORIES, REGIONS , regionLabel } from "/assets/js/ui.js";
 await renderHeader();
 import("/assets/js/share.js").then((m) => m.mountShareButton({ title: "와이드가드 매칭", text: "경비·경호 견적, 한 번의 요청으로 여러 업체 비교 - 와이드가드 매칭", url: location.origin + "/platform" }));
-const icons = ["🏢", "🛡️", "🚦", "🏗️", "⚖️", "🔒", "🧹"];
+const icons = { "시설경비": "🏢", "신변보호": "🛡️", "혼잡·교통유도": "🚦", "이주관리·범죄예방": "🏗️", "행정대집행지원": "⚖️", "특수경비": "🔒", "청소대행": "🧹" };
 $("#qCat").innerHTML = options(CATEGORIES, "", "서비스 선택");
 $("#qReg").innerHTML = options(REGIONS, "", "지역 선택");
 $("#quick").onsubmit = (e) => { e.preventDefault(); location.href = `/platform/request?category=${encodeURIComponent($("#qCat").value)}&region=${encodeURIComponent($("#qReg").value)}`; };
-$("#cats").innerHTML = CATEGORIES.map((c, i) => `<a class="cat" href="/platform/vendors?category=${encodeURIComponent(c)}"><i>${icons[i]}</i>${esc(c)}</a>`).join("");
+$("#cats").innerHTML = CATEGORIES.map((c, i) => `<a class="cat" href="/platform/vendors?category=${encodeURIComponent(c)}"><i>${icons[c]}</i>${esc(c)}</a>`).join("");
 const vs = (await store.listVendors()).slice(0, 3);
 $("#featured").innerHTML = vs.map((v) => `
   <a class="vcard" href="/platform/vendor?id=${v.id}">

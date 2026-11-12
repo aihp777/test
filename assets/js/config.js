@@ -37,16 +37,22 @@ export const pending = (v, label = "확인 후 입력") => v || `(${label})`;
 //  서비스 분야 ↔ 필요한 허가·신고 (경비업법 제2조·제4조, 공중위생관리법 제3조)
 //  업체는 보유한 허가에 해당하는 분야만 선택할 수 있습니다.
 // -------------------------------------------------------------
+// ※ 특수경비는 차후 별도 설계 예정 (특수경비업자 겸업 제한: 경비업법 제7조⑨).
+//   보안 매칭 코드(SPECIAL, FACILITY_TYPES, 요청 보안 모드)는 남겨 두었으며,
+//   ENABLE_SPECIAL 을 true 로 바꾸면 분야·허가 목록에 다시 나타납니다.
+export const ENABLE_SPECIAL = false;
+export const SPECIAL = "특수경비";
 export const CATEGORIES = [
   "시설경비",
   "신변보호",
   "혼잡·교통유도",
   "이주관리·범죄예방",
   "행정대집행지원",
-  "특수경비",
+  ...(ENABLE_SPECIAL ? [SPECIAL] : []),
   "청소대행",
 ];
-export const LICENSES = ["시설경비", "호송경비", "신변보호", "기계경비", "특수경비", "혼잡·교통유도경비"]; // 경비업법 제2조1호 6종
+// 경비업법 제2조1호 경비업무 (특수경비는 차후)
+export const LICENSES = ["시설경비", "호송경비", "신변보호", "기계경비", "혼잡·교통유도경비", ...(ENABLE_SPECIAL ? [SPECIAL] : [])];
 export const SANITATION = "건물위생관리업"; // 공중위생관리법 신고
 export const CATEGORY_REQUIRES = {
   "시설경비": ["시설경비"],
@@ -54,11 +60,10 @@ export const CATEGORY_REQUIRES = {
   "혼잡·교통유도": ["혼잡·교통유도경비"],
   "이주관리·범죄예방": ["시설경비"],       // 경비원 배치 시 시설경비 허가 필요 (대부분 집단민원현장)
   "행정대집행지원": ["시설경비"],          // 행정대집행 장소 = 집단민원현장
-  "특수경비": ["특수경비"],                // 국가중요시설 경비
+  [SPECIAL]: [SPECIAL],                    // 국가중요시설 경비 (ENABLE_SPECIAL 일 때만 노출)
   "청소대행": [SANITATION],
 };
 export const allowedCategories = (licenses = []) => CATEGORIES.filter((c) => CATEGORY_REQUIRES[c].every((l) => licenses.includes(l)));
-export const SPECIAL = "특수경비";
 
 // 집단민원현장 (경비업법 제2조5호) — 배치 48시간 전 배치허가, 경비지도사 현장 배치 의무
 export const COLLECTIVE_SITES = {
