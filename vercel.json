@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "crons": [
+    { "path": "/api/bids-sync", "schedule": "0 22 * * *" }
+  ],
   "trailingSlash": false,
   "headers": [
     {

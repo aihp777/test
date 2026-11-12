@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>비회원 문의 조회 | 와이드가드 매칭</title>
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+</head>
+<body>
+<main>
+  <div class="p-container" style="max-width:760px">
+    <div class="page-head"><h1>비회원 문의 조회</h1><p>견적문의 때 인증한 휴대폰 번호로 다시 인증하면, 문의 진행 상황과 받은 견적을 볼 수 있습니다.</p></div>
+    <div class="card" id="authBox">
+      <div class="field"><label>휴대폰 번호</label>
+        <div class="flex" style="flex-wrap:nowrap"><input id="phone" inputmode="numeric" placeholder="01012345678" maxlength="13"><button type="button" class="p-btn p-btn-navy p-btn-sm" id="send" style="white-space:nowrap">인증번호 받기</button></div></div>
+      <div class="field" id="codeRow" hidden><label>인증번호</label>
+        <div class="flex" style="flex-wrap:nowrap"><input id="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><button type="button" class="p-btn p-btn-sm" id="verify">조회</button></div>
+        <small id="demo"></small></div>
+    </div>
+    <div id="result"></div>
+  </div>
+</main>
+<script type="module">
+import { renderHeader, $, $$, esc, won, date, badge, toast, store } from "/assets/js/ui.js";
+import { REQUEST_STATUS, QUOTE_STATUS, COMPANY } from "/assets/js/config.js";
+const me = await renderHeader();
+let token = null;
+$("#send").onclick = async () => {
+  try { const r = await store.sendOtp($("#phone").value); $("#codeRow").hidden = false; $("#demo").textContent = r.demoCode ? `데모 모드: 인증번호 ${r.demoCode}` : "문자로 인증번호를 보냈습니다."; }
+  catch (e) { toast(e.message, "bad"); }
+};
+$("#verify").onclick = async () => {
+  try { token = (await store.verifyOtp($("#phone").value, $("#code").value)).token; $("#authBox").hidden = true; show(); }
+  catch (e) { toast(e.message, "bad"); }
+};
+async function show() {
+  const rs = await store.lookupGuestRequests(token);
+  const claimable = rs.some((r) => !r.customer_id);
+  $("#result").innerHTML = `
+    ${claimable ? `<div class="notice info"><b>업체 선정·결제·상담 메시지는 회원 전용입니다.</b>
+      ${me ? `<button class="p-btn p-btn-sm mt" id="claim">내 회원 계정(${esc(me.name)})으로 문의 가져오기</button>` : `<a class="p-btn p-btn-sm mt" href="/platform/login?tab=up&next=/platform/inquiry-status">회원가입 / 로그인</a> 후 이 페이지에서 다시 인증하면 문의를 계정으로 옮길 수 있습니다. 또는 ${esc(COMPANY.tel)}로 연락 주세요.`}</div>` : ""}
+    ${rs.map((r) => `
+      <div class="card">
+        <div class="flex between"><h2 style="margin:0">${esc(r.title)}</h2>${badge(REQUEST_STATUS[r.status] || r.status, "teal")}</div>
+        <p class="muted" style="font-size:13.5px">${esc(r.category)} · ${esc(r.region)} · 희망일 ${esc(r.service_date)} · 접수 ${date(r.created_at)}${r.customer_id ? " · 회원 계정으로 이전됨" : ""}</p>
+        <h3 style="font-size:15px;margin:14px 0 8px;color:var(--navy)">받은 견적 (${r.quotes.length})</h3>
+        ${r.quotes.map((q) => `<div class="quote"><div class="flex between"><b>${esc(q.vendor_company)} ${q.vendor?.is_operator ? `<span class="op-badge">운영사 직영</span>` : ""}</b>${badge(QUOTE_STATUS[q.status])}</div>
+          <div class="amt">${won(q.amount)}</div><p class="muted" style="font-size:13.5px;white-space:pre-wrap">${esc(q.message)}</p>
+          ${q.vendor ? `<div class="vid"><span>상호 <b>${esc(q.vendor.company)}</b></span><span>대표 ${esc(q.vendor.ceo)}</span><span>사업자번호 ${esc(q.vendor.biz_no)}</span>${q.vendor.license_no ? `<span>경비업 허가 ${esc(q.vendor.license_no)}</span>` : ""}<span>연락처 ${esc(q.vendor.phone)}</span></div>` : ""}</div>`).join("")
+          || `<p class="muted">아직 받은 견적이 없습니다. 와이드가드 담당자가 확인 후 연락드립니다.</p>`}
+      </div>`).join("") || `<div class="card empty">이 번호로 접수된 비회원 문의가 없습니다.</div>`}`;
+  const c = $("#claim");
+  if (c) c.onclick = async () => { try { const n = await store.claimGuestRequests(token); toast(`${n}건을 내 계정으로 옮겼습니다.`); setTimeout(() => (location.href = "/platform/dashboard"), 800); } catch (e) { toast(e.message, "bad"); } };
+}
+</script>
+</body>
+</html>

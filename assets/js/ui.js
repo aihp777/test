@@ -81,6 +81,7 @@ export async function renderHeader() {
       <a class="p-logo" href="/platform/"><img src="/images/logo-dark.png" alt=""><span><b>WIDE GUARD</b><small>${esc(CONFIG.SITE_NAME)}</small></span></a>
       <nav class="p-nav" id="pNav">
         <a href="/platform/request">견적 요청</a>
+        ${me ? "" : `<a href="/platform/inquiry-status">비회원 문의 조회</a>`}
         <a href="/platform/vendors">업체 찾기</a>
         <a href="/platform/vendor-join">업체 등록</a>
         ${me ? `<a href="/platform/dashboard">마이페이지</a>` : ""}

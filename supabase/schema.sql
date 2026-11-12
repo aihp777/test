@@ -472,6 +472,149 @@ create policy "vendor docs read" on storage.objects for select to authenticated
   using (bucket_id = 'vendor-docs' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
 
 -- =============================================================
+--  공동 관리자 업무함 · 비회원 문의 · 나라장터 입찰 (2026-11)
+-- =============================================================
+alter table public.profiles add column if not exists title text;   -- 직책 (대표이사, 사내이사)
+
+-- 비회원 견적문의
+alter table public.requests alter column customer_id drop not null;
+alter table public.requests add column if not exists is_guest boolean not null default false;
+-- 비회원 연락처는 요청 테이블과 분리 → 업체는 볼 수 없고 관리자만 열람
+create table if not exists public.guest_contacts (
+  request_id uuid primary key references public.requests(id) on delete cascade,
+  name text not null,
+  phone text not null,
+  verified_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_guest_contacts_phone on public.guest_contacts (phone);
+alter table public.guest_contacts enable row level security;
+drop policy if exists "guest contacts admin" on public.guest_contacts;
+create policy "guest contacts admin" on public.guest_contacts for select using (public.is_admin());
+
+-- 휴대폰 인증번호 (서버 함수 전용: RLS 정책 없음 = 클라이언트 접근 불가)
+create table if not exists public.otp_codes (
+  id bigint generated always as identity primary key,
+  phone text not null,
+  code_hash text not null,
+  attempts int not null default 0,
+  used boolean not null default false,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_otp_phone on public.otp_codes (phone, created_at desc);
+alter table public.otp_codes enable row level security;
+
+-- 관리자 공동 업무함
+create table if not exists public.admin_tasks (
+  id uuid primary key default gen_random_uuid(),
+  type text not null,            -- guest_inquiry, request, vendor_review, payment, settle, refund, bid
+  ref_id text,
+  title text not null,
+  detail text,
+  status text not null default 'new' check (status in ('new', 'in_progress', 'done')),
+  assignee text,
+  read_by uuid[] not null default '{}',
+  events jsonb not null default '[]',
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_tasks_status on public.admin_tasks (status, created_at desc);
+alter table public.admin_tasks enable row level security;
+drop policy if exists "tasks admin" on public.admin_tasks;
+create policy "tasks admin" on public.admin_tasks for all using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.add_task(p_type text, p_ref text, p_title text, p_detail text) returns void
+language sql security definer set search_path = public as $$
+  insert into admin_tasks (type, ref_id, title, detail, events)
+  values (p_type, p_ref, p_title, p_detail, jsonb_build_array(jsonb_build_object('at', now(), 'by', '시스템', 'action', '접수 · 관리자 2인 알림')));
+$$;
+
+create or replace function public.task_on_request() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    if not new.is_guest then   -- 비회원 문의는 guest_contacts 저장 시 업무 등록
+      perform public.add_task('request', new.id::text, new.title, new.customer_name || ' · ' || new.category || ' · ' || new.region);
+    end if;
+  elsif new.status = 'completed' and old.status <> 'completed' then
+    perform public.add_task('settle', new.id::text, new.title, '고객 서비스 완료 확인 → PG 지급대행 정산 진행');
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_task_request on public.requests;
+create trigger trg_task_request after insert or update of status on public.requests for each row execute function public.task_on_request();
+
+create or replace function public.task_on_guest() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare r requests;
+begin
+  select * into r from requests where id = new.request_id;
+  perform public.add_task('guest_inquiry', new.request_id::text, r.title,
+    new.name || ' · ' || left(new.phone, 3) || '-****-' || right(new.phone, 4) || ' · ' || r.category || ' · ' || r.region || ' — 연락 필요');
+  return new;
+end $$;
+drop trigger if exists trg_task_guest on public.guest_contacts;
+create trigger trg_task_guest after insert on public.guest_contacts for each row execute function public.task_on_guest();
+
+create or replace function public.task_on_vendor() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'pending' and (tg_op = 'INSERT' or old.status <> 'pending' or new.docs is distinct from old.docs) then
+    perform public.add_task('vendor_review', new.id::text, new.company || ' 업체 심사', array_to_string(new.categories, ', '));
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_task_vendor on public.vendors;
+create trigger trg_task_vendor after insert or update on public.vendors for each row execute function public.task_on_vendor();
+
+create or replace function public.task_on_payment() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.status = 'paid' and old.status <> 'paid' then
+    perform public.add_task('payment', new.id::text, coalesce(new.order_name, new.order_id), to_char(new.amount, 'FM999,999,999,999') || '원 결제 완료');
+  elsif new.status = 'refunded' and old.status <> 'refunded' then
+    perform public.add_task('refund', new.id::text, coalesce(new.order_name, new.order_id), '환불 · 사유: ' || coalesce(new.refund_reason, '-'));
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_task_payment on public.payments;
+create trigger trg_task_payment after update of status on public.payments for each row execute function public.task_on_payment();
+
+-- 나라장터 입찰 공고
+create table if not exists public.bids (
+  id uuid primary key default gen_random_uuid(),
+  bid_no text not null,
+  bid_ord text not null default '000',
+  title text not null,
+  org text, demand_org text, region_limit text default '',
+  close_at timestamptz, open_at timestamptz,
+  base_amount bigint, presumed_price bigint,
+  url text, keyword text, raw jsonb,
+  status text not null default 'new' check (status in ('new', 'review', 'go', 'submitted', 'won', 'lost', 'skip')),
+  assignee text, memo text, my_amount bigint,
+  updated_by text, updated_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (bid_no, bid_ord)
+);
+alter table public.bids enable row level security;
+drop policy if exists "bids admin" on public.bids;
+create policy "bids admin" on public.bids for all using (public.is_admin()) with check (public.is_admin());
+
+create or replace function public.task_on_bid() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.add_task('bid', new.id::text, new.title, coalesce(new.org, '') || ' · 마감 ' || coalesce(to_char(new.close_at at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI'), '-') || coalesce(' · 지역제한 ' || nullif(new.region_limit, ''), ''));
+  return new;
+end $$;
+drop trigger if exists trg_task_bid on public.bids;
+create trigger trg_task_bid after insert on public.bids for each row execute function public.task_on_bid();
+
+-- ★ 문자 알림 연결: Supabase 대시보드 > Database > Webhooks > Create
+--   Table: admin_tasks / Events: INSERT / Type: HTTP Request / Method: POST
+--   URL: https://<사이트 도메인>/api/notify
+--   HTTP Headers: x-webhook-secret = <Vercel 환경변수 NOTIFY_SECRET 과 같은 값>
+
+-- =============================================================
 --  관리자 지정: 가입 후 아래 이메일을 바꿔 실행하세요.
 --  update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'admin@your-company.com');

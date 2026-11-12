@@ -34,6 +34,40 @@ export const COMPANY = {
 export const pending = (v, label = "확인 후 입력") => v || `(${label})`;
 
 // -------------------------------------------------------------
+//  공동 관리자 (업무 동시 확인·알림)
+//  ※ 휴대폰 번호는 공개 저장소에 올리면 안 되므로 코드에 넣지 않습니다.
+//    Vercel 환경변수 ADMIN_PHONES="번호1,번호2" 로 설정하면 문자(SMS) 알림이 두 분께 동시에 발송됩니다.
+// -------------------------------------------------------------
+export const ADMIN_TEAM = [
+  { name: "김정환", title: "대표이사" },
+  { name: "김종연", title: "사내이사" },
+];
+export const TASK_TYPES = {
+  guest_inquiry: { label: "비회원 견적문의", icon: "📞" },
+  request: { label: "회원 견적요청", icon: "📝" },
+  vendor_review: { label: "업체 승인 심사", icon: "🏢" },
+  payment: { label: "결제 완료", icon: "💳" },
+  settle: { label: "정산 대기", icon: "🏦" },
+  refund: { label: "환불 처리", icon: "↩️" },
+  bid: { label: "나라장터 신규 공고", icon: "📢" },
+};
+export const TASK_STATUS = { new: "신규", in_progress: "처리중", done: "완료" };
+
+// 비회원 견적문의: 휴대폰 문자 인증
+export const OTP = { length: 6, ttlMin: 5, maxSendPerHour: 5 };
+
+// 나라장터(조달청) 입찰공고 수집 조건
+export const BID = {
+  keywords: ["경비", "경호", "보안요원", "안전요원", "교통정리", "주차관리", "질서유지"],
+  excludeKeywords: ["경비지원", "운영경비", "여비", "경비정산"],
+  homeRegion: "경기",            // 주사무소 소재지 (지역제한 판단 기준)
+  okRegions: ["경기", "경기도"], // 참가 가능 지역제한 (빈 값 = 전국)
+};
+export const BID_STATUS = {
+  new: "신규", review: "검토중", go: "참여 결정", submitted: "투찰 완료", won: "낙찰", lost: "미낙찰", skip: "불참",
+};
+
+// -------------------------------------------------------------
 //  서비스 분야 ↔ 필요한 허가·신고 (경비업법 제2조·제4조, 공중위생관리법 제3조)
 //  업체는 보유한 허가에 해당하는 분야만 선택할 수 있습니다.
 // -------------------------------------------------------------

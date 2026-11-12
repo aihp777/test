@@ -1,7 +1,7 @@
 // =============================================================
 //  데이터 계층: 데모(localStorage) / 운영(Supabase) 공통 인터페이스
 // =============================================================
-import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES } from "./config.js";
+import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES, OTP } from "./config.js";
 
 // 업체 보유 허가·신고 목록
 export const vendorLicenses = (v) => [...(v.licenses || []), ...(v.sanitation_no ? [SANITATION] : [])];
@@ -27,18 +27,20 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v5";
+const DB_KEY = "wg_platform_v6";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
   const t = (d) => new Date(Date.now() - d * 86400000).toISOString();
-  const admin = { id: "u-admin", email: "admin@demo.com", password: "demo1234", name: "플랫폼 관리자", phone: "031-945-2001", role: "admin", created_at: t(400) };
+  // 공동 관리자 2인 (휴대폰 번호는 공개 코드에 넣지 않음 → Vercel 환경변수 ADMIN_PHONES)
+  const admin = { id: "u-admin", email: "admin@demo.com", password: "demo1234", name: "김정환", title: "대표이사", phone: "", role: "admin", created_at: t(400) };
+  const admin2 = { id: "u-admin2", email: "admin2@demo.com", password: "demo1234", name: "김종연", title: "사내이사", phone: "", role: "admin", created_at: t(400) };
   const cust = { id: "u-cust", email: "customer@demo.com", password: "demo1234", name: "김고객", phone: "010-1234-5678", role: "customer", created_at: t(60) };
   const v1u = { id: "u-v1", email: "vendor@demo.com", password: "demo1234", name: "김정환", phone: "031-945-2001", role: "vendor", created_at: t(300) };
   const v2u = { id: "u-v2", email: "vendor2@demo.com", password: "demo1234", name: "이대표", phone: "02-000-0000", role: "vendor", created_at: t(120) };
   const v3u = { id: "u-v3", email: "vendor3@demo.com", password: "demo1234", name: "박대표", phone: "032-000-0000", role: "vendor", created_at: t(1) };
   return {
-    users: [admin, cust, v1u, v2u, v3u],
+    users: [admin, admin2, cust, v1u, v2u, v3u],
     vendors: [
       { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "000-00-00000", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
         licenses: ["시설경비", "신변보호", "혼잡·교통유도경비"], license_no: "(데모) 허가번호 확인 후 입력", sanitation_no: "", docs: [], is_operator: true,
@@ -61,7 +63,27 @@ function seed() {
     ],
     payments: [],
     settings: { fee_rate: CONFIG.DEFAULT_FEE_RATE },
+    tasks: [],
+    otp_log: [],
+    bids: [
+      // 데모용 나라장터 공고 예시 (실제 공고 아님)
+      { id: "b-1", bid_no: "R26BK0000001", bid_ord: "000", title: "(데모) 2027년 청사 시설경비 용역", org: "(데모) ○○시청", demand_org: "(데모) ○○시청", region_limit: "경기도", close_at: new Date(Date.now() + 6 * 86400000).toISOString(), open_at: new Date(Date.now() + 7 * 86400000).toISOString(), base_amount: 384000000, presumed_price: 349090909, url: "https://www.g2b.go.kr", keyword: "경비", status: "new", assignee: null, memo: "", my_amount: null, created_at: t(0.2) },
+      { id: "b-2", bid_no: "R26BK0000002", bid_ord: "000", title: "(데모) 지역축제 안전요원 및 교통정리 용역", org: "(데모) ○○문화재단", demand_org: "(데모) ○○문화재단", region_limit: "", close_at: new Date(Date.now() + 3 * 86400000).toISOString(), open_at: new Date(Date.now() + 3.5 * 86400000).toISOString(), base_amount: 52000000, presumed_price: 47272727, url: "https://www.g2b.go.kr", keyword: "안전요원", status: "review", assignee: "김종연", memo: "현장설명회 참석 필요 여부 확인", my_amount: null, created_at: t(1) },
+      { id: "b-3", bid_no: "R26BK0000003", bid_ord: "000", title: "(데모) 공공기관 본사 경비·보안 위탁용역", org: "(데모) △△공사", demand_org: "(데모) △△공사", region_limit: "부산광역시", close_at: new Date(Date.now() + 10 * 86400000).toISOString(), open_at: new Date(Date.now() + 11 * 86400000).toISOString(), base_amount: 1210000000, presumed_price: 1100000000, url: "https://www.g2b.go.kr", keyword: "경비", status: "new", assignee: null, memo: "", my_amount: null, created_at: t(0.5) },
+    ],
   };
+}
+
+// 관리자 업무함: 두 관리자가 동시에 확인 (운영 모드는 DB 트리거 + 문자 알림)
+function addTask(d, type, ref_id, title, detail = "") {
+  d.tasks = d.tasks || [];
+  d.tasks.push({ id: uid(), type, ref_id, title, detail, status: "new", assignee: null, read_by: [], events: [{ at: now(), by: "시스템", action: "접수 · 관리자 2인 알림 (데모: 문자 미발송)" }], created_at: now() });
+}
+function seedTasks(d) {
+  addTask(d, "request", "r-1", "가평 야외 축제 교통유도 인력 20명", "김고객 · 혼잡·교통유도 · 경기");
+  addTask(d, "vendor_review", "v-3", "그린클린(데모) 업체 등록 심사", "청소대행 · 건물위생관리업 신고증 확인 필요");
+  d.bids.filter((b) => b.status === "new").forEach((b) => addTask(d, "bid", b.id, b.title, `${b.org} · 마감 ${b.close_at.slice(0, 10)}`));
+  return d;
 }
 
 // 데모용 과거 거래 이력 (관리자 대시보드 차트 확인용)
@@ -89,7 +111,7 @@ function seedHistory(db) {
 
 const load = () => {
   try { const d = JSON.parse(localStorage.getItem(DB_KEY)); if (d) return d; } catch (e) {}
-  const d = seedHistory(seed()); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
+  const d = seedTasks(seedHistory(seed())); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
 };
 const save = (d) => {
   try { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
@@ -143,12 +165,15 @@ const demo = {
     if (existing) {
       // 허가 정보가 바뀌면 재심사 (승인 → 승인 대기)
       const licChanged = JSON.stringify(vendorLicenses(existing)) !== JSON.stringify(vendorLicenses(data)) || existing.license_no !== data.license_no;
-      Object.assign(existing, data, { docs: [...(existing.docs || []), ...newDocs], status: existing.status === "approved" && !licChanged && !newDocs.length ? "approved" : "pending" });
+      const wasApproved = existing.status === "approved";
+      Object.assign(existing, data, { docs: [...(existing.docs || []), ...newDocs], status: wasApproved && !licChanged && !newDocs.length ? "approved" : "pending" });
+      if (existing.status === "pending") addTask(d, "vendor_review", existing.id, `${existing.company} ${wasApproved ? "허가정보 변경 재심사" : "등록 정보 수정 심사"}`, existing.categories.join(", "));
       save(d); return existing;
     }
     if (!newDocs.length) throw new Error("허가증(신고증) 사본을 첨부해 주세요.");
     const v = { id: uid(), owner_id: me.id, status: "pending", rating: 0, review_count: 0, created_at: now(), ...data, docs: newDocs };
     d.vendors.push(v);
+    addTask(d, "vendor_review", v.id, `${v.company} 업체 등록 심사`, `${v.categories.join(", ")} · 서류 ${newDocs.length}건`);
     const u = d.users.find((x) => x.id === me.id); if (u.role === "customer") u.role = "vendor";
     save(d); return v;
   },
@@ -161,11 +186,62 @@ const demo = {
     const d = load();
     const urls = await Promise.all(photos.map(blobToDataURL));
     const r = { id: uid(), customer_id: me.id, customer_name: me.name, status: "open", selected_quote_id: null, target_vendor_id: null, created_at: now(), ...data, photos: urls };
-    d.requests.push(r); save(d); return r;
+    d.requests.push(r);
+    addTask(d, "request", r.id, r.title, `${me.name} · ${r.category} · ${r.region}`);
+    save(d); return r;
+  },
+
+  // --- 비회원 견적문의 (휴대폰 문자 인증)
+  async sendOtp(phone) {
+    phone = normPhone(phone); if (!/^01[016789]\d{7,8}$/.test(phone)) throw new Error("휴대폰 번호를 정확히 입력해 주세요.");
+    const d = load(); d.otp_log = (d.otp_log || []).filter((x) => Date.now() - x.at < 3600e3);
+    if (d.otp_log.filter((x) => x.phone === phone).length >= OTP.maxSendPerHour) throw new Error("인증번호 요청이 너무 많습니다. 1시간 후 다시 시도해 주세요.");
+    const code = String(Math.floor(Math.random() * 10 ** OTP.length)).padStart(OTP.length, "0");
+    d.otp_log.push({ phone, at: Date.now() }); save(d);
+    sessionStorage.setItem("wg_otp", JSON.stringify({ phone, code, exp: Date.now() + OTP.ttlMin * 60e3, tries: 0 }));
+    return { demoCode: code }; // 데모: 화면에 표시 / 운영: 문자 발송
+  },
+  async verifyOtp(phone, code) {
+    phone = normPhone(phone);
+    const s = JSON.parse(sessionStorage.getItem("wg_otp") || "null");
+    if (!s || s.phone !== phone) throw new Error("인증번호를 먼저 요청해 주세요.");
+    if (Date.now() > s.exp) throw new Error("인증 시간이 지났습니다. 다시 요청해 주세요.");
+    if (++s.tries > 5) { sessionStorage.removeItem("wg_otp"); throw new Error("입력 횟수를 초과했습니다. 다시 요청해 주세요."); }
+    sessionStorage.setItem("wg_otp", JSON.stringify(s));
+    if (s.code !== String(code).trim()) throw new Error("인증번호가 일치하지 않습니다.");
+    sessionStorage.removeItem("wg_otp");
+    const token = btoa(JSON.stringify({ phone, exp: Date.now() + 30 * 60e3, demo: true }));
+    return { token };
+  },
+  async createGuestRequest(data, guest, photos = []) {
+    const t = readDemoToken(guest.token);
+    if (!String(guest.name || "").trim()) throw new Error("성함을 입력해 주세요.");
+    validateRequest(data, photos);
+    const d = load();
+    const urls = await Promise.all(photos.map(blobToDataURL));
+    const r = { id: uid(), customer_id: null, is_guest: true, guest_name: guest.name.trim(), guest_phone: t.phone, guest_verified_at: now(), customer_name: guest.name.trim() + " (비회원)", status: "open", selected_quote_id: null, target_vendor_id: null, created_at: now(), ...data, photos: urls };
+    d.requests.push(r);
+    addTask(d, "guest_inquiry", r.id, r.title, `${r.guest_name} · ${maskPhone(t.phone)} · ${r.category} · ${r.region} — 연락 필요`);
+    save(d); return r;
+  },
+  async lookupGuestRequests(token) {
+    const t = readDemoToken(token); const d = load();
+    const rs = d.requests.filter((r) => r.is_guest && r.guest_phone === t.phone).sort(byNewest);
+    return rs.map((r) => ({ ...r, quotes: d.quotes.filter((q) => q.request_id === r.id).map((q) => ({ ...q, vendor: d.vendors.find((v) => v.id === q.vendor_id) })) }));
+  },
+  async getGuestContact(request_id) { const r = load().requests.find((x) => x.id === request_id); return r && r.is_guest ? { name: r.guest_name, phone: r.guest_phone, verified_at: r.guest_verified_at } : null; },
+  async claimGuestRequests(token) {
+    const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
+    const t = readDemoToken(token); const d = load(); let n = 0;
+    d.requests.filter((r) => r.is_guest && r.guest_phone === t.phone && !r.customer_id).forEach((r) => { r.customer_id = me.id; r.customer_name = me.name; n++; });
+    save(d); return n;
   },
   async getPhotoUrls(r) { return r.photos || []; },
   async getDocUrls(v) { return (v.docs || []).map((x) => ({ name: x.name, url: x.path })); },
-  async getRequest(id) { return load().requests.find((r) => r.id === id) || null; },
+  async getRequest(id) {
+    const r = load().requests.find((x) => x.id === id) || null; const me = await this.currentUser();
+    return r && me && me.role === "admin" ? r : r && hideGuest(r);
+  },
   async listMyRequests() { const me = await this.currentUser(); return load().requests.filter((r) => r.customer_id === me.id).sort(byNewest); },
   async listMatchedRequests() {
     const v = await this.myVendor(); if (!v || v.status !== "approved") return [];
@@ -174,10 +250,14 @@ const demo = {
     return d.requests.filter((r) =>
       r.target_vendor_id === v.id || quoted.has(r.id) ||
       (r.status === "open" && !r.target_vendor_id && v.categories.includes(r.category) && covers(v.regions, r.region))
-    ).sort(byNewest);
+    ).sort(byNewest).map(hideGuest);
   },
   async listAllRequests() { return load().requests.sort(byNewest); },
-  async updateRequestStatus(id, status) { const d = load(); const r = d.requests.find((x) => x.id === id); r.status = status; save(d); return r; },
+  async updateRequestStatus(id, status) {
+    const d = load(); const r = d.requests.find((x) => x.id === id); r.status = status;
+    if (status === "completed") addTask(d, "settle", r.id, r.title, "고객 서비스 완료 확인 → PG 지급대행 정산 진행");
+    save(d); return r;
+  },
 
   // --- quotes
   async createQuote({ request_id, amount, message }) {
@@ -227,7 +307,9 @@ const demo = {
   async completeDemoPayment(order_id) {
     const d = load(); const p = d.payments.find((x) => x.order_id === order_id);
     p.status = "paid"; p.payment_key = "DEMO-" + order_id; p.paid_at = now();
-    d.requests.find((r) => r.id === p.request_id).status = "paid"; save(d); return p;
+    d.requests.find((r) => r.id === p.request_id).status = "paid";
+    addTask(d, "payment", p.id, p.order_name, `${p.amount.toLocaleString()}원 결제 완료`);
+    save(d); return p;
   },
   async getPaymentByOrder(order_id) { return load().payments.find((p) => p.order_id === order_id) || null; },
   async listPayments() {
@@ -253,9 +335,40 @@ const demo = {
     if (p.settlement_status === "settled") throw new Error("이미 정산된 건입니다.");
     p.status = "refunded"; p.refund_reason = reason; p.refunded_at = now();
     const r = d.requests.find((x) => x.id === p.request_id); if (r) r.status = "canceled";
+    addTask(d, "refund", p.id, p.order_name, `환불 ${p.amount.toLocaleString()}원 · 사유: ${reason}`);
     save(d); return p;
   },
+
+  // --- 관리자 업무함 (공동 확인)
+  async listTasks() { return (load().tasks || []).sort(byNewest); },
+  async updateTask(id, action, memo = "") {
+    const me = await this.currentUser(); const d = load(); const t = d.tasks.find((x) => x.id === id);
+    const who = `${me.name} ${me.title || ""}`.trim();
+    if (action === "take") { t.status = "in_progress"; t.assignee = who; }
+    if (action === "done") { t.status = "done"; t.assignee = t.assignee || who; }
+    if (action === "reopen") { t.status = "new"; }
+    if (action === "read") { t.read_by = [...new Set([...(t.read_by || []), me.id])]; save(d); return t; }
+    t.events.push({ at: now(), by: who, action: { take: "담당 지정", done: "처리 완료", reopen: "다시 열기", memo: "메모" }[action] + (memo ? ` — ${memo}` : "") });
+    save(d); return t;
+  },
+
+  // --- 나라장터 입찰
+  async listBids() { return (load().bids || []).sort((a, b) => (a.close_at > b.close_at ? 1 : -1)); },
+  async updateBid(id, patch) {
+    const me = await this.currentUser(); const d = load(); const b = d.bids.find((x) => x.id === id);
+    Object.assign(b, patch, { updated_by: me.name, updated_at: now() }); save(d); return b;
+  },
+  async syncBids() { return { added: 0, message: "데모 모드: 실제 수집은 운영 환경(Vercel 서버 함수 + 공공데이터포털 인증키)에서 실행됩니다." }; },
 };
+
+// 비회원 연락처는 관리자 외에는 숨김
+function hideGuest(r) { if (!r || !r.is_guest) return r; const { guest_phone, guest_verified_at, ...rest } = r; return rest; }
+function normPhone(p) { return String(p || "").replace(/\D/g, ""); }
+function maskPhone(p) { p = normPhone(p); return p.length >= 10 ? p.slice(0, 3) + "-****-" + p.slice(-4) : p; }
+function readDemoToken(token) {
+  try { const t = JSON.parse(atob(token)); if (Date.now() > t.exp) throw 0; return t; }
+  catch { throw new Error("휴대폰 인증이 만료되었습니다. 다시 인증해 주세요."); }
+}
 
 // -------------------------------------------------------------
 //  SUPABASE STORE
@@ -411,6 +524,47 @@ const supa = {
     if (!res.ok) throw new Error(body.message || "환불 처리에 실패했습니다.");
     return body.payment;
   },
+
+  // --- 비회원 견적문의 (서버 함수: api/otp.js, api/inquiry.js)
+  async sendOtp(phone) { return api("/api/otp", { action: "send", phone }); },
+  async verifyOtp(phone, code) { return api("/api/otp", { action: "verify", phone, code }); },
+  async createGuestRequest(data, guest, photos = []) {
+    validateRequest(data, photos);
+    const images = await Promise.all(photos.map(blobToDataURL));
+    return (await api("/api/inquiry", { action: "create", token: guest.token, name: guest.name, data, images })).request;
+  },
+  async lookupGuestRequests(token) { return (await api("/api/inquiry", { action: "lookup", token })).requests; },
+  async getGuestContact(request_id) { const c = await client(); return ok(await c.from("guest_contacts").select("*").eq("request_id", request_id).maybeSingle()); },
+  async claimGuestRequests(token) { return (await api("/api/inquiry", { action: "claim", token }, true)).claimed; },
+
+  // --- 관리자 업무함
+  async listTasks() { const c = await client(); return ok(await c.from("admin_tasks").select("*").order("created_at", { ascending: false }).limit(500)); },
+  async updateTask(id, action, memo = "") {
+    const c = await client(); const me = await this.currentUser();
+    const t = ok(await c.from("admin_tasks").select("*").eq("id", id).single());
+    const who = `${me.name} ${me.title || ""}`.trim();
+    if (action === "read") return ok(await c.from("admin_tasks").update({ read_by: [...new Set([...(t.read_by || []), me.id])] }).eq("id", id).select().single());
+    const patch = { events: [...(t.events || []), { at: now(), by: who, action: { take: "담당 지정", done: "처리 완료", reopen: "다시 열기", memo: "메모" }[action] + (memo ? ` — ${memo}` : "") }] };
+    if (action === "take") Object.assign(patch, { status: "in_progress", assignee: who });
+    if (action === "done") Object.assign(patch, { status: "done", assignee: t.assignee || who });
+    if (action === "reopen") patch.status = "new";
+    return ok(await c.from("admin_tasks").update(patch).eq("id", id).select().single());
+  },
+
+  // --- 나라장터 입찰
+  async listBids() { const c = await client(); return ok(await c.from("bids").select("*").order("close_at", { ascending: true }).limit(300)); },
+  async updateBid(id, patch) { const c = await client(); const me = await this.currentUser(); return ok(await c.from("bids").update({ ...patch, updated_by: me.name, updated_at: now() }).eq("id", id).select().single()); },
+  async syncBids() { return api("/api/bids-sync", {}, true); },
 };
+
+async function api(path, body, auth = false) {
+  const headers = { "Content-Type": "application/json" };
+  if (auth) { const c = await client(); const { data } = await c.auth.getSession(); if (data.session) headers.Authorization = "Bearer " + data.session.access_token; }
+  const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.message || "요청에 실패했습니다.");
+  return json;
+}
+export { maskPhone };
 
 export const store = IS_DEMO ? demo : supa;

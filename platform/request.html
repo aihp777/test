@@ -11,6 +11,20 @@
 <main>
   <div class="p-container" style="max-width:760px">
     <div class="page-head"><h1>견적 요청</h1><p id="sub">요청 내용을 입력하면 조건에 맞는 업체들이 견적을 보내드립니다.</p></div>
+    <div class="card mb" id="guestBox" hidden>
+      <div class="flex between"><h2 style="margin:0">비회원 견적문의</h2><a href="/platform/login?next=/platform/request" class="p-btn p-btn-line p-btn-sm">회원 로그인</a></div>
+      <p class="muted" style="font-size:13.5px;margin:6px 0 14px">회원가입 없이 성함과 휴대폰 번호 인증만으로 문의할 수 있습니다. 와이드가드 담당자가 확인 후 연락드리며, 받은 견적은 <a href="/platform/inquiry-status" style="color:var(--blue)">비회원 문의 조회</a>에서 확인할 수 있습니다.</p>
+      <div class="row2">
+        <div class="field"><label>문의자 성함<em>*</em></label><input id="gName" maxlength="30" autocomplete="name"></div>
+        <div class="field"><label>휴대폰 번호<em>*</em></label>
+          <div class="flex" style="flex-wrap:nowrap"><input id="gPhone" inputmode="numeric" placeholder="01012345678" maxlength="13" autocomplete="tel"><button type="button" class="p-btn p-btn-navy p-btn-sm" id="sendOtp" style="white-space:nowrap">인증번호 받기</button></div></div>
+      </div>
+      <div class="field" id="otpRow" hidden><label>인증번호<em>*</em> <span class="muted" id="otpTimer" style="font-weight:500"></span></label>
+        <div class="flex" style="flex-wrap:nowrap"><input id="gCode" inputmode="numeric" maxlength="6" placeholder="6자리" autocomplete="one-time-code"><button type="button" class="p-btn p-btn-sm" id="verifyOtp" style="white-space:nowrap">확인</button></div>
+        <small id="demoCode"></small></div>
+      <p id="verified" hidden class="badge ok">✔ 휴대폰 인증 완료</p>
+      <label class="flex" style="font-size:13.5px;margin-top:10px"><input type="checkbox" id="gAgree" style="width:auto"> [필수] 견적 상담을 위한 개인정보(성함, 휴대폰 번호) 수집·이용 및 매칭 업체 제공에 동의합니다. <a href="/platform/privacy" target="_blank" style="text-decoration:underline">자세히</a></label>
+    </div>
     <form class="card" id="form">
       <div id="target" class="mb" hidden></div>
       <div class="row2">
@@ -57,8 +71,32 @@
 <script type="module">
 import { renderHeader, requireLogin, $, $$, esc, options, qs, toast, resizeImage, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
 import { NATIONWIDE, IS_DEMO, SPECIAL, FACILITY_TYPES, COLLECTIVE_SITES } from "/assets/js/config.js";
-await renderHeader();
-await requireLogin();
+const me = await renderHeader();
+const isGuest = !me;
+// ---------- 비회원: 휴대폰 문자 인증 ----------
+let guestToken = null, timer = null;
+if (isGuest) {
+  $("#guestBox").hidden = false;
+  $("#sub").textContent = "회원은 로그인 후, 비회원은 휴대폰 인증 후 견적을 요청할 수 있습니다.";
+  $("#sendOtp").onclick = async () => {
+    try {
+      const r = await store.sendOtp($("#gPhone").value);
+      $("#otpRow").hidden = false; $("#gCode").focus();
+      $("#demoCode").textContent = r.demoCode ? `데모 모드: 인증번호 ${r.demoCode} (운영 시 문자로 발송)` : "문자로 인증번호를 보냈습니다.";
+      let left = 300; clearInterval(timer);
+      timer = setInterval(() => { left--; $("#otpTimer").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`; if (left <= 0) { clearInterval(timer); $("#otpTimer").textContent = "시간 초과"; } }, 1000);
+      $("#sendOtp").textContent = "재전송";
+    } catch (e) { toast(e.message, "bad"); }
+  };
+  $("#verifyOtp").onclick = async () => {
+    try {
+      guestToken = (await store.verifyOtp($("#gPhone").value, $("#gCode").value)).token;
+      clearInterval(timer); $("#otpRow").hidden = true; $("#verified").hidden = false;
+      $("#gPhone").readOnly = true; $("#sendOtp").disabled = true;
+      toast("휴대폰 인증이 완료되었습니다.");
+    } catch (e) { toast(e.message, "bad"); }
+  };
+}
 $("#fac").innerHTML = options(FACILITY_TYPES, "", "선택");
 $("#col").innerHTML = Object.entries(COLLECTIVE_SITES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
 // 분야별 화면 전환: 특수경비 = 보안 모드 / 이주관리·행정대집행 = 집단민원현장 기본값 제안
@@ -117,6 +155,11 @@ syncCategoryMode();
 
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
+  if (isGuest) {
+    if (!$("#gName").value.trim()) { $("#gName").focus(); return toast("문의자 성함을 입력해 주세요.", "bad"); }
+    if (!guestToken) { $("#gPhone").focus(); return toast("휴대폰 인증을 먼저 완료해 주세요.", "bad"); }
+    if (!$("#gAgree").checked) return toast("개인정보 수집·이용에 동의해 주세요.", "bad");
+  }
   const f = Object.fromEntries(new FormData(e.target));
   delete f.files;
   if (f.category !== SPECIAL) delete f.facility_type;
@@ -125,6 +168,14 @@ $("#form").onsubmit = async (e) => {
   const btn = $("#submitBtn");
   btn.disabled = true; btn.textContent = photos.length ? "사진 업로드 중..." : "요청 중...";
   try {
+    if (isGuest) {
+      const r = await store.createGuestRequest(f, { name: $("#gName").value, token: guestToken }, photos.map((p) => p.blob));
+      $("#guestBox").hidden = true;
+      $("#form").outerHTML = `<div class="card" style="text-align:center"><div style="font-size:44px">✅</div><h2>견적문의가 접수되었습니다</h2>
+        <p class="muted">와이드가드 담당자(김정환 대표 · 김종연 이사)가 동시에 확인하고 연락드립니다.<br>업체 견적은 '비회원 문의 조회'에서 휴대폰 인증 후 확인할 수 있습니다.</p>
+        <div class="flex mt" style="justify-content:center"><a class="p-btn" href="/platform/inquiry-status">비회원 문의 조회</a><a class="p-btn p-btn-line" href="/platform/login?tab=up">회원가입</a></div></div>`;
+      return;
+    }
     const r = await store.createRequest(f, photos.map((p) => p.blob));
     location.href = "/platform/dashboard?request=" + r.id + "&new=1";
   } catch (err) { toast(err.message, "bad"); btn.disabled = false; btn.textContent = "견적 요청하기"; }

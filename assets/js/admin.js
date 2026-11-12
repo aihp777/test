@@ -2,13 +2,13 @@
 //  관리자 콘솔 (/admin)
 // =============================================================
 import { $, $$, esc, won, date, datetime, badge, toast, renderPhotos, store, CATEGORIES, REGIONS, regionLabel } from "./ui.js";
-import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES } from "./config.js";
+import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES, ADMIN_TEAM, TASK_TYPES, TASK_STATUS, BID, BID_STATUS } from "./config.js";
 
 // ---------- 인증 ----------
 const me = await store.currentUser();
 if (!me) { location.href = "/platform/login?next=/admin/"; throw new Error("redirect"); }
 if (me.role !== "admin") { document.body.innerHTML = `<div class="empty" style="padding:80px">관리자만 접근할 수 있습니다. <a href="/platform/" style="color:var(--blue)">플랫폼으로</a></div>`; throw new Error("forbidden"); }
-$("#who").textContent = `${me.name} (${me.email})`;
+$("#who").textContent = `${me.name} ${me.title || ""} (${me.email})`;
 $("#logout").onclick = async () => { await store.signOut(); location.href = "/platform/login"; };
 $("#menu").onclick = () => $("#side").classList.toggle("open");
 
@@ -35,7 +35,12 @@ async function loadAll() {
   const toSettle = payments.filter((p) => isPaid(p) && (p.settlement_status || "pending") === "pending").length;
   $("#cntVendors").hidden = !pending; $("#cntVendors").textContent = pending;
   $("#cntPay").hidden = !toSettle; $("#cntPay").textContent = toSettle;
-  return { users, vendors, requests, quotes, payments, settings };
+  const [tasks, bids] = await Promise.all([store.listTasks(), store.listBids()]);
+  const openTasks = tasks.filter((t) => t.status !== "done").length;
+  const newBids = bids.filter((b) => b.status === "new").length;
+  $("#cntTasks").hidden = !openTasks; $("#cntTasks").textContent = openTasks;
+  $("#cntBids").hidden = !newBids; $("#cntBids").textContent = newBids;
+  return { users, vendors, requests, quotes, payments, settings, tasks, bids };
 }
 
 function csv(filename, header, rows) {
@@ -130,6 +135,8 @@ async function dashboard() {
       </div>
       <div class="panel"><h3>처리할 일</h3><p class="sub">관리자 확인이 필요한 항목</p>
         <div class="todo">
+          <a href="#tasks">🔔 공동 업무함 미처리 <b>${(await store.listTasks()).filter((t) => t.status !== "done").length}</b></a>
+          <a href="#bids?status=new">📢 나라장터 신규 공고 <b>${(await store.listBids()).filter((b) => b.status === "new").length}</b></a>
           <a href="#vendors?status=pending">승인 대기 업체 <b>${vendors.filter((v) => v.status === "pending").length}</b></a>
           <a href="#requests?filter=noquote">견적 0건인 요청 <b>${noQuote.length}</b></a>
           <a href="#payments?settle=ready">정산 가능 (서비스 완료) <b>${settleReady.length}</b></a>
@@ -306,7 +313,7 @@ async function requestDrawer(r, qBy, payments, vendors) {
   const target = r.target_vendor_id ? vendors.find((v) => v.id === r.target_vendor_id) : null;
   openDrawer(r.title, `
     <p>${rBadge(r.status)} ${target ? badge("지정: " + target.company, "navy") : ""} ${r.category === "특수경비" ? badge("🔒 특수경비 · " + (r.facility_type || ""), "navy") : ""} ${r.collective_site ? badge("집단민원현장: " + (COLLECTIVE_SITES[r.collective_site] || r.collective_site), "warn") : ""}</p>
-    <dl class="kv mt"><dt>고객</dt><dd>${esc(r.customer_name)}</dd><dt>분야 / 지역</dt><dd>${esc(r.category)} · ${esc(r.region)}</dd><dt>희망 시작일</dt><dd>${esc(r.service_date)}</dd>
+    <dl class="kv mt"><dt>고객</dt><dd>${esc(r.customer_name)}${r.is_guest ? ` ${badge("비회원", "warn")}` : ""}</dd>${r.is_guest ? `<dt>연락처</dt><dd id="gContact" class="muted">불러오는 중...</dd>` : ""}<dt>분야 / 지역</dt><dd>${esc(r.category)} · ${esc(r.region)}</dd><dt>희망 시작일</dt><dd>${esc(r.service_date)}</dd>
       <dt>예산</dt><dd>${r.budget ? won(r.budget) : "협의"}</dd><dt>등록일</dt><dd>${datetime(r.created_at)}</dd></dl>
     <h4>상세 내용</h4><p style="white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:10px;font-size:14px">${esc(r.details)}</p>
     <div id="dPhotos"></div>
@@ -321,6 +328,10 @@ async function requestDrawer(r, qBy, payments, vendors) {
     <div class="flex"><select id="newSt" style="width:auto">${Object.entries(REQUEST_STATUS).map(([k, l]) => `<option value="${k}" ${k === r.status ? "selected" : ""}>${l}</option>`).join("")}</select><button class="p-btn p-btn-sm" id="saveSt">변경</button></div>
     <p class="muted mt" style="font-size:12.5px">분쟁 조정, 허위 요청 처리 등 예외 상황에서만 사용하세요. 결제 건 취소는 결제·정산 메뉴에서 환불로 처리합니다.</p>`);
   renderPhotos($("#dPhotos"), r);
+  if (r.is_guest) store.getGuestContact(r.id).then((g) => {
+    $("#gContact").classList.remove("muted");
+    $("#gContact").innerHTML = g ? `<b>${esc(g.name)} · <a href="tel:${esc(g.phone)}">${esc(g.phone)}</a></b> <small class="muted">(휴대폰 인증 ${datetime(g.verified_at)} · 관리자만 열람)</small>` : "-";
+  });
   $("#saveSt").onclick = async () => {
     const s = $("#newSt").value; if (s === r.status) return;
     if (!confirm(`상태를 '${REQUEST_STATUS[s]}'(으)로 변경할까요?`)) return;
@@ -410,6 +421,13 @@ async function settings() {
       <form class="panel" id="feeForm"><h3>중개 수수료</h3><p class="sub">새로 생성되는 결제부터 적용됩니다.</p>
         <div class="field"><label>수수료율 (%)</label><input type="number" name="rate" min="0" max="50" step="0.5" value="${(settings.fee_rate * 100).toFixed(1)}"></div>
         <button class="p-btn">저장</button></form>
+      <div class="panel" style="grid-column:1/-1"><h3>공동 관리자 · 알림 수신</h3><p class="sub">모든 업무 알림이 아래 두 분께 동시에 발송됩니다</p>
+        <table class="a-tbl"><thead><tr><th>이름</th><th>직책</th><th>관리자 콘솔</th><th>문자 알림</th></tr></thead><tbody>
+        ${ADMIN_TEAM.map((a) => `<tr><td><b>${esc(a.name)}</b></td><td>${esc(a.title)}</td><td>${badge("업무함 공유", "ok")}</td><td>${IS_DEMO ? badge("데모: 미발송", "warn") : badge("ADMIN_PHONES 환경변수", "teal")}</td></tr>`).join("")}
+        </tbody></table>
+        <p class="muted mt" style="font-size:12.5px">휴대폰 번호는 공개 저장소 노출을 막기 위해 코드가 아닌 <b>Vercel 환경변수 ADMIN_PHONES</b>에 저장합니다. 문자는 솔라피(SOLAPI) 계정·발신번호 등록 후 발송됩니다 (README 참고).
+        알림 대상: 비회원 견적문의 · 회원 견적요청 · 업체 승인 심사 · 결제 완료 · 정산 대기 · 환불 · 나라장터 신규 공고</p>
+      </div>
       <div class="panel"><h3>시스템 상태</h3><p class="sub">운영 전환 상태를 확인합니다. 설정 방법은 README 참고</p>
         <dl class="kv"><dt>데이터 저장</dt><dd>${IS_DEMO ? badge("데모 (브라우저 저장)", "warn") : badge("Supabase 연결됨", "ok")}</dd>
           <dt>결제</dt><dd>${CONFIG.TOSS_CLIENT_KEY ? (CONFIG.TOSS_CLIENT_KEY.startsWith("live_") ? badge("토스페이먼츠 라이브", "ok") : badge("토스페이먼츠 테스트", "teal")) : badge("미설정 (테스트 결제)", "warn")}</dd>
@@ -421,8 +439,136 @@ async function settings() {
   const rs = $("#reset"); if (rs) rs.onclick = async () => { if (confirm("데모 데이터를 처음 상태로 되돌릴까요? (관리자 로그인은 유지됩니다)")) { store.resetDemo(); await store.signIn("admin@demo.com", "demo1234"); location.hash = "dashboard"; location.reload(); } };
 }
 
+// =============================================================
+//  공동 업무함 — 김정환 대표이사 · 김종연 사내이사 동시 확인
+// =============================================================
+const TASK_LINK = { guest_inquiry: "requests", request: "requests", vendor_review: "vendors?status=pending", payment: "payments", settle: "payments?settle=ready", refund: "payments", bid: "bids" };
+async function tasksView(params) {
+  const { tasks, users } = await loadAll();
+  const admins = users.filter((u) => u.role === "admin");
+  const f0 = params.get("status") || "open";
+  $("#main").innerHTML = `
+    <div class="notice info" style="margin-top:0"><b>🔔 공동 업무함</b>견적문의(회원·비회원), 업체 승인, 결제·정산·환불, 나라장터 신규 공고가 접수되면
+      <strong>${ADMIN_TEAM.map((a) => `${esc(a.name)} ${esc(a.title)}`).join(" · ")}</strong>에게 <strong>동시에</strong> 알림이 갑니다 (관리자 콘솔 + 문자).
+      누가 확인했는지, 누가 처리 중인지 함께 보이므로 중복 처리나 누락을 막을 수 있습니다.</div>
+    <div class="tabs" id="tt">${[["open", "미처리"], ["new", "신규"], ["in_progress", "처리중"], ["done", "완료"], ["all", "전체"]].map(([k, l]) =>
+      `<button data-s="${k}" class="${k === f0 ? "on" : ""}">${l} (${k === "all" ? tasks.length : k === "open" ? tasks.filter((t) => t.status !== "done").length : tasks.filter((t) => t.status === k).length})</button>`).join("")}</div>
+    <div class="toolbar"><select id="ty"><option value="">전체 유형</option>${Object.entries(TASK_TYPES).map(([k, v]) => `<option value="${k}">${v.icon} ${v.label}</option>`).join("")}</select>
+      <input type="search" id="q" placeholder="제목·내용 검색"><span class="sp"></span><span class="count" id="count"></span></div>
+    <div class="a-wrap"><table class="a-tbl"><thead><tr><th>유형</th><th>내용</th><th>상태</th><th>담당</th><th>확인</th><th>접수</th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  $$("#tt button").forEach((b) => (b.onclick = () => (location.hash = "tasks?status=" + b.dataset.s)));
+  const readMarks = (t) => admins.map((a) => `<span class="${(t.read_by || []).includes(a.id) ? "" : "muted"}" title="${esc(a.name)}">${(t.read_by || []).includes(a.id) ? "✔" : "○"} ${esc(a.name)}</span>`).join(" ");
+  const draw = () => {
+    const ty = $("#ty").value, q = $("#q").value.trim();
+    const rows = tasks.filter((t) => (f0 === "all" || (f0 === "open" ? t.status !== "done" : t.status === f0)) && (!ty || t.type === ty) && (!q || `${t.title}${t.detail}`.includes(q)));
+    $("#count").textContent = `${rows.length}건`;
+    $("#tb").innerHTML = rows.map((t) => `<tr class="click" data-id="${t.id}" style="${(t.read_by || []).includes(me.id) ? "" : "font-weight:700"}">
+      <td style="white-space:nowrap">${TASK_TYPES[t.type]?.icon || ""} ${esc(TASK_TYPES[t.type]?.label || t.type)}</td>
+      <td><div>${esc(t.title)}</div><div class="sm">${esc(t.detail || "")}</div></td>
+      <td>${badge(TASK_STATUS[t.status], t.status === "done" ? "" : t.status === "new" ? "bad" : "warn")}</td>
+      <td class="sm">${esc(t.assignee || "-")}</td><td class="sm" style="white-space:nowrap">${readMarks(t)}</td><td class="sm">${datetime(t.created_at)}</td></tr>`).join("")
+      || `<tr><td colspan="6" class="empty">해당 업무가 없습니다.</td></tr>`;
+    $$("#tb tr.click").forEach((tr) => (tr.onclick = () => taskDrawer(tasks.find((t) => t.id === tr.dataset.id))));
+  };
+  $("#ty").onchange = draw; $("#q").oninput = draw; draw();
+}
+async function taskDrawer(t) {
+  if (!(t.read_by || []).includes(me.id)) t = await store.updateTask(t.id, "read");
+  openDrawer(`${TASK_TYPES[t.type]?.icon || ""} ${TASK_TYPES[t.type]?.label || "업무"}`, `
+    <p>${badge(TASK_STATUS[t.status], t.status === "done" ? "" : "warn")} ${t.assignee ? `담당: <b>${esc(t.assignee)}</b>` : "담당자 미지정"}</p>
+    <h4>${esc(t.title)}</h4><p style="font-size:14px">${esc(t.detail || "")}</p>
+    <h4>처리 이력</h4>
+    <div class="log">${(t.events || []).map((e) => `<p><b>${esc(e.by)}</b><time>${datetime(e.at)}</time><br>${esc(e.action)}</p>`).join("")}</div>
+    <h4>메모 남기기</h4><div class="flex" style="flex-wrap:nowrap"><input id="tMemo" placeholder="예) 고객 통화 완료, 내일 현장 방문"><button class="p-btn p-btn-sm" id="tMemoBtn">기록</button></div>`,
+    `${t.status !== "in_progress" && t.status !== "done" ? `<button class="p-btn" data-a="take">내가 처리하기</button>` : ""}
+     ${t.status !== "done" ? `<button class="p-btn p-btn-navy" data-a="done">처리 완료</button>` : `<button class="p-btn p-btn-line" data-a="reopen">다시 열기</button>`}
+     <a class="p-btn p-btn-line" href="#${TASK_LINK[t.type] || "dashboard"}">관련 화면 열기</a>`);
+  $$("#drawerFoot [data-a]").forEach((b) => (b.onclick = async () => { await store.updateTask(t.id, b.dataset.a); toast("반영되었습니다."); closeDrawer(); route(); }));
+  $("#tMemoBtn").onclick = async () => { const m = $("#tMemo").value.trim(); if (!m) return; await store.updateTask(t.id, "memo", m); toast("메모를 기록했습니다."); closeDrawer(); route(); };
+  loadAll(); // 배지 갱신
+}
+
+// =============================================================
+//  나라장터 입찰 — 공고 자동 수집 · 검토 · 투찰가 산정 보조 (투찰은 나라장터에서 직접)
+// =============================================================
+const bidEligible = (b) => !b.region_limit || BID.okRegions.some((r) => b.region_limit.includes(r));
+const dDay = (iso) => { if (!iso) return "-"; const d = Math.ceil((new Date(iso) - Date.now()) / 86400e3); return d < 0 ? "마감" : d === 0 ? "D-day" : `D-${d}`; };
+async function bidsView(params) {
+  const { bids } = await loadAll();
+  const st = params.get("status") || "";
+  const soon = bids.filter((b) => b.close_at && new Date(b.close_at) - Date.now() < 3 * 86400e3 && new Date(b.close_at) > Date.now() && !["skip", "submitted", "won", "lost"].includes(b.status));
+  $("#main").innerHTML = `
+    <div class="notice warn" style="margin-top:0"><b>투찰(입찰서 제출)은 자동화하지 않습니다.</b>나라장터 전자입찰은 공동인증서 등 본인 확인 절차가 필요합니다.
+      이 화면은 <strong>공고 자동 수집(매일 07시) → 자격 확인 → 두 분께 동시 알림 → 검토·참여 결정 → 투찰가 산정 보조 → 결과 기록</strong>을 지원하고, 투찰은 담당자가 나라장터에서 직접 진행합니다.</div>
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><span>신규 공고</span><b>${bids.filter((b) => b.status === "new").length}건</b><small>키워드: ${esc(BID.keywords.slice(0, 4).join("·"))} 외</small></div>
+      <div class="kpi"><span>검토 · 참여 결정</span><b>${bids.filter((b) => ["review", "go"].includes(b.status)).length}건</b><small>투찰 완료 ${bids.filter((b) => b.status === "submitted").length}건</small></div>
+      <div class="kpi"><span>마감 임박 (3일 이내)</span><b style="color:${soon.length ? "var(--bad)" : "inherit"}">${soon.length}건</b><small>미결정 공고 기준</small></div>
+      <div class="kpi"><span>낙찰</span><b>${bids.filter((b) => b.status === "won").length}건</b><small>미낙찰 ${bids.filter((b) => b.status === "lost").length}건</small></div>
+    </div>
+    <div class="toolbar">
+      <select id="st"><option value="">전체 상태</option>${Object.entries(BID_STATUS).map(([k, v]) => `<option value="${k}" ${k === st ? "selected" : ""}>${v}</option>`).join("")}</select>
+      <select id="el"><option value="">전체 지역</option><option value="ok">참가 가능 (전국·${esc(BID.homeRegion)})</option><option value="no">지역제한 확인 필요</option></select>
+      <input type="search" id="q" placeholder="공고명·기관 검색"><span class="sp"></span><span class="count" id="count"></span>
+      <button class="p-btn p-btn-navy p-btn-sm" id="sync">지금 수집</button>
+      <button class="p-btn p-btn-line p-btn-sm" id="csv">CSV</button>
+    </div>
+    <div class="a-wrap"><table class="a-tbl"><thead><tr><th>공고명</th><th>공고기관</th><th>지역제한</th><th class="num">기초금액</th><th>마감</th><th>상태</th><th>담당</th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  let rows = [];
+  const draw = () => {
+    const s = $("#st").value, el = $("#el").value, q = $("#q").value.trim();
+    rows = bids.filter((b) => (!s || b.status === s) && (!el || (el === "ok" ? bidEligible(b) : !bidEligible(b))) && (!q || `${b.title}${b.org}${b.demand_org}`.includes(q)));
+    $("#count").textContent = `${rows.length}건`;
+    $("#tb").innerHTML = rows.map((b) => `<tr class="click" data-id="${b.id}">
+      <td><b>${esc(b.title)}</b><div class="sm">${esc(b.bid_no)}-${esc(b.bid_ord)} · 키워드 ${esc(b.keyword || "-")}</div></td>
+      <td class="sm">${esc(b.org || "-")}</td>
+      <td>${bidEligible(b) ? badge(b.region_limit || "전국", "ok") : badge(b.region_limit + " (확인)", "warn")}</td>
+      <td class="num">${b.base_amount ? won(b.base_amount) : "-"}</td>
+      <td class="sm" style="white-space:nowrap">${dDay(b.close_at)}<div>${datetime(b.close_at)}</div></td>
+      <td>${badge(BID_STATUS[b.status] || b.status, { new: "bad", review: "warn", go: "teal", submitted: "navy", won: "ok" }[b.status] || "")}</td>
+      <td class="sm">${esc(b.assignee || "-")}</td></tr>`).join("") || `<tr><td colspan="7" class="empty">공고가 없습니다.</td></tr>`;
+    $$("#tb tr.click").forEach((tr) => (tr.onclick = () => bidDrawer(bids.find((b) => b.id === tr.dataset.id))));
+  };
+  ["st", "el"].forEach((id) => ($("#" + id).onchange = draw)); $("#q").oninput = draw; draw();
+  $("#sync").onclick = async (e) => { e.target.disabled = true; try { const r = await store.syncBids(); toast(r.message || `새 공고 ${r.added}건 (조회 ${r.fetched}건)`); route(); } catch (err) { toast(err.message, "bad"); e.target.disabled = false; } };
+  $("#csv").onclick = () => csv("나라장터입찰", ["공고번호", "차수", "공고명", "공고기관", "수요기관", "지역제한", "기초금액", "마감", "개찰", "상태", "담당", "투찰예정가", "메모"],
+    rows.map((b) => [b.bid_no, b.bid_ord, b.title, b.org, b.demand_org, b.region_limit || "전국", b.base_amount, datetime(b.close_at), datetime(b.open_at), BID_STATUS[b.status], b.assignee, b.my_amount, b.memo]));
+}
+function bidDrawer(b) {
+  openDrawer("입찰 공고 상세", `
+    <p>${badge(BID_STATUS[b.status])} ${bidEligible(b) ? badge("참가 가능 지역", "ok") : badge("지역제한 확인 필요", "warn")} <b>${dDay(b.close_at)}</b></p>
+    <h4>${esc(b.title)}</h4>
+    <dl class="kv"><dt>공고번호</dt><dd>${esc(b.bid_no)}-${esc(b.bid_ord)}</dd><dt>공고기관</dt><dd>${esc(b.org || "-")}</dd><dt>수요기관</dt><dd>${esc(b.demand_org || "-")}</dd>
+      <dt>참가제한지역</dt><dd>${esc(b.region_limit || "없음(전국)")}</dd><dt>기초금액</dt><dd>${b.base_amount ? won(b.base_amount) : "-"}</dd><dt>추정가격</dt><dd>${b.presumed_price ? won(b.presumed_price) : "-"}</dd>
+      <dt>입찰마감</dt><dd>${datetime(b.close_at)}</dd><dt>개찰</dt><dd>${datetime(b.open_at)}</dd>${b.updated_by ? `<dt>최근 수정</dt><dd>${esc(b.updated_by)} · ${datetime(b.updated_at)}</dd>` : ""}</dl>
+    <p class="mt"><a class="p-btn p-btn-line p-btn-sm" href="${esc(b.url || "https://www.g2b.go.kr")}" target="_blank" rel="noopener">나라장터 공고 원문 열기 ↗</a></p>
+    <h4>참가 전 확인</h4>
+    <ul style="font-size:13.5px;margin-left:18px;line-height:1.9"><li>입찰참가자격 등록 업종(경비업 허가 업무)과 공고의 업종 제한 일치 여부</li><li>지역제한, 실적·신용평가 등 적격심사 기준</li><li>낙찰하한율·예정가격 결정 방식(복수예비가격), 현장설명회 여부</li><li>공동인증서·전자입찰 준비, 투찰 마감 시각</li></ul>
+    <h4>투찰가 산정 보조 (참고용)</h4>
+    <div class="row2"><div class="field"><label>기초금액 (원)</label><input type="number" id="cBase" value="${b.base_amount || ""}"></div>
+      <div class="field"><label>낙찰하한율 (%) <small class="muted">공고문 확인</small></label><input type="number" id="cRate" step="0.001" placeholder="예) 공고문 기재값"></div></div>
+    <div id="calc" class="log" style="max-height:none"><p class="muted">기초금액과 낙찰하한율을 입력하면 사정률별 하한 투찰가를 계산합니다.</p></div>
+    <h4>진행 관리</h4>
+    <div class="row2"><div class="field"><label>상태</label><select id="bSt">${Object.entries(BID_STATUS).map(([k, v]) => `<option value="${k}" ${k === b.status ? "selected" : ""}>${v}</option>`).join("")}</select></div>
+      <div class="field"><label>담당</label><select id="bAs"><option value="">미지정</option>${ADMIN_TEAM.map((a) => `<option ${a.name === b.assignee ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></div></div>
+    <div class="field"><label>투찰 예정가 / 투찰가 (원)</label><input type="number" id="bAmt" value="${b.my_amount || ""}"></div>
+    <div class="field"><label>메모</label><textarea id="bMemo" style="min-height:70px">${esc(b.memo || "")}</textarea></div>`,
+    `<button class="p-btn" id="bSave">저장</button>`);
+  const calc = () => {
+    const base = +$("#cBase").value, rate = +$("#cRate").value;
+    if (!base || !rate) return;
+    const rows = [98, 99, 100, 101, 102].map((s) => { const est = base * s / 100; return `<p>사정률 ${s}% → 예정가격 ${won(Math.round(est))} → <b>하한 투찰가 ${won(Math.ceil(est * rate / 100))}</b></p>`; });
+    $("#calc").innerHTML = rows.join("") + `<p class="muted" style="font-size:12px">예정가격은 복수예비가격 추첨으로 결정되므로 실제와 다를 수 있습니다. 최종 투찰가는 공고문과 내부 원가를 기준으로 결정하세요.</p>`;
+  };
+  $("#cBase").oninput = calc; $("#cRate").oninput = calc;
+  $("#bSave").onclick = async () => {
+    await store.updateBid(b.id, { status: $("#bSt").value, assignee: $("#bAs").value || null, my_amount: +$("#bAmt").value || null, memo: $("#bMemo").value });
+    toast("저장되었습니다."); closeDrawer(); route();
+  };
+}
+
 // ---------- 라우터 ----------
-const VIEWS = { dashboard: ["대시보드", dashboard], users: ["회원 관리", users], vendors: ["업체 관리", vendorsView], requests: ["견적 요청", requestsView], payments: ["결제 · 정산", paymentsView], settings: ["설정", settings] };
+const VIEWS = { dashboard: ["대시보드", dashboard], tasks: ["공동 업무함", tasksView], users: ["회원 관리", users], vendors: ["업체 관리", vendorsView], requests: ["견적 요청", requestsView], payments: ["결제 · 정산", paymentsView], bids: ["나라장터 입찰", bidsView], settings: ["설정", settings] };
 async function route() {
   const [name, qs] = (location.hash.slice(1) || "dashboard").split("?");
   const [title, fn] = VIEWS[name] || VIEWS.dashboard;

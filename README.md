@@ -118,3 +118,45 @@ Vercel 프로젝트 → **Settings → Domains**에서 회사 도메인을 추�
 - **약관·개인정보처리방침**: `/platform/terms`, `/platform/privacy` (초안, 법률 검토 후 확정)
 - **동의 분리 및 기록**, **업체 신원정보 제공**(견적 선정 전), **운영사 직영 표시**(관리자 설정)
 - 오픈 전 `assets/js/config.js`의 `COMPANY`(사업자등록번호, 통신판매업 신고번호, 경비업 허가번호, 이메일)를 실제 값으로 입력하세요.
+
+## 공동 관리 · 비회원 문의 · 나라장터 (2026-11)
+
+### 1. 공동 관리자 (김정환 대표이사 · 김종연 사내이사)
+- 관리자 콘솔 **공동 업무함**(`/admin#tasks`): 비회원 견적문의, 회원 견적요청, 업체 승인 심사, 결제·정산·환불, 나라장터 신규 공고가 자동 등록되고, **누가 확인했는지(✔)·누가 처리 중인지·처리 이력**을 두 분이 함께 봅니다.
+- **문자 동시 알림**: 업무가 등록되면 두 분 휴대폰으로 동시에 문자가 갑니다.
+- ⚠️ 휴대폰 번호는 공개 저장소에 올리지 않습니다 → Vercel 환경변수에만 입력
+- 데모 계정: admin@demo.com(김정환 대표), admin2@demo.com(김종연 이사) / demo1234
+- 운영: 두 분이 사이트에서 회원가입 → Supabase SQL로 role='admin', title 지정
+  ```sql
+  update public.profiles set role='admin', title='대표이사' where email='대표님 이메일';
+  update public.profiles set role='admin', title='사내이사' where email='이사님 이메일';
+  ```
+
+### 2. 비회원 견적문의 (휴대폰 문자 인증)
+- `/platform/request`에서 로그인하지 않으면 **성함 + 휴대폰 번호 → 인증번호(6자리, 5분) 확인** 후 문의 가능
+- 제한: 번호당 인증번호 1시간 5회, 입력 5회, 문의 하루 5건
+- 비회원 연락처는 별도 테이블(`guest_contacts`)에 저장 → **관리자만 열람**, 업체에는 성함(비회원)만 표시
+- `/platform/inquiry-status`: 같은 번호로 다시 인증하면 진행 상황·받은 견적 확인, 회원가입 후 계정으로 옮기기
+
+### 3. 나라장터 입찰 (`/admin#bids`)
+- 매일 07:00(KST) **용역 입찰공고 자동 수집**(키워드: 경비·경호·보안요원·안전요원·교통정리·주차관리·질서유지) → 새 공고는 업무함 등록 + 2인 문자 알림
+- 지역제한 자동 판별, 마감 D-day, 상태 관리(신규→검토→참여 결정→투찰 완료→낙찰/미낙찰), 담당 지정, **투찰가 산정 보조**(기초금액 × 사정률 × 낙찰하한율), CSV
+- **투찰(입찰서 제출)은 자동화하지 않습니다** — 나라장터에서 공동인증서로 담당자가 직접 제출
+- 공공데이터포털 "조달청_나라장터 입찰공고정보서비스"(데이터 ID 15129394) **활용신청** 후 인증키 입력. API 1회 조회기간은 최대 7일(2026-11-10 변경)
+- 오퍼레이션 영문명은 활용신청 후 명세서로 확인 → 다르면 `NARA_OP` 환경변수만 변경
+
+### Vercel 환경변수 (전체)
+| 변수 | 용도 |
+|---|---|
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | DB (서버 전용) |
+| `TOSS_SECRET_KEY` | 결제 승인·환불 |
+| `OTP_SECRET` | 휴대폰 인증 토큰 서명 (임의의 긴 문자열) |
+| `SOLAPI_API_KEY`, `SOLAPI_API_SECRET`, `SOLAPI_SENDER` | 문자 발송 (솔라피 가입, **발신번호 사전 등록** 필수 — 예: 회사 대표번호) |
+| `ADMIN_PHONES` | 알림 받을 관리자 휴대폰, 쉼표로 구분 (예: `010xxxxxxxx,010xxxxxxxx`) |
+| `NOTIFY_SECRET` | Supabase 웹훅 → `/api/notify` 인증 (임의 문자열) |
+| `NARA_SERVICE_KEY` | 공공데이터포털 인증키(Decoding) |
+| `NARA_BASE`, `NARA_OP` | (선택) 나라장터 API 주소·오퍼레이션명 변경 시 |
+| `CRON_SECRET` | Vercel Cron 인증 (임의 문자열) |
+
+### Supabase 웹훅 (문자 알림 연결)
+Database → Webhooks → Create: Table `admin_tasks`, Events `INSERT`, Method `POST`, URL `https://<도메인>/api/notify`, Header `x-webhook-secret: <NOTIFY_SECRET 값>`
