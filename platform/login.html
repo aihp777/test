@@ -57,7 +57,15 @@
 import { renderHeader, $, $$, toast, qs, store } from "/assets/js/ui.js";
 import { IS_DEMO } from "/assets/js/config.js";
 await renderHeader();
-const next = qs("next") || "/platform/dashboard";
+const rawNext = qs("next") || "/platform/dashboard";
+const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/platform/dashboard"; // 사이트 내부 주소만 허용
+// 데모 안내 페이지(/demo)의 원클릭 체험: ?demo=admin|admin2|customer|vendor|logout (데모 모드에서만 동작)
+const DEMO_ACCOUNTS = { admin: "admin@demo.com", admin2: "admin2@demo.com", customer: "customer@demo.com", vendor: "vendor@demo.com" };
+if (IS_DEMO && qs("demo")) {
+  if (qs("demo") === "logout") await store.signOut();
+  else if (DEMO_ACCOUNTS[qs("demo")]) await store.signIn(DEMO_ACCOUNTS[qs("demo")], "demo1234");
+  location.replace(next);
+}
 const go = () => (location.href = next);
 $$(".tabs button").forEach((b) => (b.onclick = () => {
   $$(".tabs button").forEach((x) => x.classList.toggle("on", x === b));

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>와이드가드 매칭 플랫폼 — 데모 확인 방법</title>
+<meta name="robots" content="noindex">
+<meta property="og:type" content="website">
+<meta property="og:title" content="와이드가드 매칭 플랫폼 — 데모 확인 방법">
+<meta property="og:description" content="대표이사·사내이사 공동 관리, 비회원 견적문의, 나라장터 입찰 관리를 버튼 한 번으로 체험해 보세요.">
+<meta property="og:url" content="https://3w4ertd4w3.vercel.app/demo">
+<meta property="og:image" content="https://3w4ertd4w3.vercel.app/images/og-image.jpg">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<link rel="icon" href="/images/logo-dark.png">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link rel="stylesheet" href="/assets/platform.css">
+<style>
+  .hero-demo { background: radial-gradient(circle at 85% 0%, rgba(20,188,184,.3), transparent 45%), var(--navy-deep); color: #fff; padding: 48px 0 40px; }
+  .hero-demo h1 { font-size: clamp(24px, 4.5vw, 34px); line-height: 1.35; }
+  .hero-demo p { opacity: .85; margin-top: 10px; }
+  .step { display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: start; }
+  .step .n { width: 40px; height: 40px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 800; display: grid; place-items: center; }
+  .step h3 { color: var(--navy); font-size: 17px; margin-bottom: 4px; }
+  .step p, .step li { font-size: 14.5px; color: var(--ink); }
+  .step ul { margin: 6px 0 10px 18px; line-height: 1.8; }
+  .go { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .acct { font-size: 13px; background: var(--bg); border-radius: 10px; padding: 10px 14px; margin-top: 14px; line-height: 1.8; }
+</style>
+</head>
+<body>
+<section class="hero-demo">
+  <div class="p-container" style="max-width:760px">
+    <img src="/images/logo-white.png" alt="" style="width:44px;margin-bottom:14px">
+    <h1>와이드가드 매칭 플랫폼<br>데모 확인 방법</h1>
+    <p>아래 버튼을 누르면 해당 역할로 바로 로그인됩니다. 데모 데이터는 각자의 휴대폰·PC 브라우저에만 저장되며 실제 결제·문자는 발생하지 않습니다.</p>
+  </div>
+</section>
+<main>
+  <div class="p-container" style="max-width:760px;padding:28px 0">
+    <div class="card"><div class="step"><div class="n">1</div><div>
+      <h3>공동 업무함 — 김정환 대표이사로 보기</h3>
+      <ul><li>왼쪽 메뉴 <b>🔔 공동 업무함</b>에서 견적문의·업체 심사·나라장터 공고를 확인</li>
+        <li>업무를 눌러 <b>"내가 처리하기"</b> → 담당자가 표시됩니다</li></ul>
+      <div class="go"><a class="p-btn" href="/platform/login?demo=admin&next=/admin/%23tasks">김정환 대표이사로 보기</a></div>
+    </div></div></div>
+
+    <div class="card"><div class="step"><div class="n">2</div><div>
+      <h3>같은 업무를 김종연 사내이사로 보기</h3>
+      <ul><li>1번에서 처리한 업무에 <b>"김정환 대표이사 · 처리중"</b>과 확인 표시(✔)가 함께 보입니다</li>
+        <li>메모를 남기면 대표이사 화면에도 이력이 공유됩니다</li></ul>
+      <div class="go"><a class="p-btn p-btn-navy" href="/platform/login?demo=admin2&next=/admin/%23tasks">김종연 사내이사로 보기</a></div>
+    </div></div></div>
+
+    <div class="card"><div class="step"><div class="n">3</div><div>
+      <h3>비회원 견적문의 체험</h3>
+      <ul><li>성함·휴대폰 번호 입력 → <b>인증번호 받기</b> (데모에서는 인증번호가 화면에 표시)</li>
+        <li>문의 접수 후 관리자 공동 업무함에 <b>"비회원 견적문의 — 연락 필요"</b>로 등록됩니다</li></ul>
+      <div class="go"><a class="p-btn" href="/platform/login?demo=logout&next=/platform/request">비회원으로 견적문의 하기</a>
+        <a class="p-btn p-btn-line" href="/platform/inquiry-status">비회원 문의 조회</a></div>
+    </div></div></div>
+
+    <div class="card"><div class="step"><div class="n">4</div><div>
+      <h3>나라장터 입찰 관리</h3>
+      <ul><li>관리자 메뉴 <b>📢 나라장터 입찰</b>: 자동 수집된 공고(데모 예시), 지역제한 판별, 마감 D-day</li>
+        <li>공고를 눌러 <b>낙찰하한율</b>을 입력하면 투찰가 산정표가 계산됩니다 (투찰은 나라장터에서 직접)</li></ul>
+      <div class="go"><a class="p-btn" href="/platform/login?demo=admin&next=/admin/%23bids">나라장터 입찰 화면 보기</a></div>
+    </div></div></div>
+
+    <div class="card"><div class="step"><div class="n">5</div><div>
+      <h3>고객 · 업체 화면</h3>
+      <ul><li>고객: 받은 견적 비교 → 업체 정보 확인 → 선정 → 테스트 결제</li>
+        <li>업체(와이드가드): 매칭된 요청 확인 → 견적 제출 → 고객 상담</li></ul>
+      <div class="go"><a class="p-btn p-btn-line" href="/platform/login?demo=customer&next=/platform/dashboard">고객으로 보기</a>
+        <a class="p-btn p-btn-line" href="/platform/login?demo=vendor&next=/platform/dashboard">업체(와이드가드)로 보기</a>
+        <a class="p-btn p-btn-line" href="/">회사 홈페이지</a></div>
+    </div></div></div>
+
+    <div class="acct">직접 로그인할 때 (비밀번호 모두 <b>demo1234</b>)<br>
+      관리자: admin@demo.com (김정환 대표이사) · admin2@demo.com (김종연 사내이사)<br>
+      고객: customer@demo.com · 업체: vendor@demo.com<br>
+      처음 상태로 되돌리기: 화면 상단 노란 띠의 <b>"데모 데이터 초기화"</b></div>
+  </div>
+</main>
+<script type="module">
+import { mountShareButton } from "/assets/js/share.js";
+mountShareButton({ title: "와이드가드 매칭 — 데모 확인 방법", text: "와이드가드 매칭 플랫폼 데모 확인 방법", url: location.origin + "/demo" });
+</script>
+</body>
+</html>
