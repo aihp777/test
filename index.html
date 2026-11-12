@@ -428,6 +428,8 @@
     <div>
       <strong>주식회사 와이드가드</strong>
       <p>대표자 김정환 &nbsp;|&nbsp; 경기도 김포시 풍무2로 25, 2층 2-2호<br>T. 031-945-2001 &nbsp;|&nbsp; F. 031-3442-2001</p>
+      <p id="bizInfo" style="font-size:13px;opacity:.75;margin-top:6px"></p>
+      <p style="font-size:13px;margin-top:6px"><a href="/platform/terms" style="color:#fff">이용약관</a> &nbsp;·&nbsp; <a href="/platform/privacy" style="color:#fff"><b>개인정보처리방침</b></a></p>
     </div>
     <p class="copy">&copy; 2026 WIDE GUARD Co., Ltd. All rights reserved.</p>
   </div>
@@ -436,6 +438,8 @@
 <script src="script.js"></script>
 <script type="module">
 import { mountShareButton } from "/assets/js/share.js";
+import { COMPANY, pending } from "/assets/js/config.js";
+document.getElementById("bizInfo").textContent = `사업자등록번호 ${pending(COMPANY.bizNo)} · 경비업 허가 ${pending(COMPANY.securityLicenseNo)} · 통신판매업 신고 ${pending(COMPANY.mailOrderNo, "신고 진행 중")}`;
 mountShareButton({ title: "(주)와이드가드", text: "(주)와이드가드 - 시설경비·신변보호·이주관리 전문기업", url: location.origin + "/" });
 </script>
 </body>

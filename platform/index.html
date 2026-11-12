@@ -71,7 +71,7 @@
 import { renderHeader, $, esc, options, store, CATEGORIES, REGIONS , regionLabel } from "/assets/js/ui.js";
 await renderHeader();
 import("/assets/js/share.js").then((m) => m.mountShareButton({ title: "와이드가드 매칭", text: "경비·경호 견적, 한 번의 요청으로 여러 업체 비교 - 와이드가드 매칭", url: location.origin + "/platform" }));
-const icons = ["🏢", "🛡️", "🚦", "🏗️", "⚖️", "🧹"];
+const icons = ["🏢", "🛡️", "🚦", "🏗️", "⚖️", "🔒", "🧹"];
 $("#qCat").innerHTML = options(CATEGORIES, "", "서비스 선택");
 $("#qReg").innerHTML = options(REGIONS, "", "지역 선택");
 $("#quick").onsubmit = (e) => { e.preventDefault(); location.href = `/platform/request?category=${encodeURIComponent($("#qCat").value)}&region=${encodeURIComponent($("#qReg").value)}`; };

@@ -339,6 +339,139 @@ drop policy if exists "payments admin update" on public.payments;
 create policy "payments admin update" on public.payments for update using (public.is_admin());
 
 -- =============================================================
+--  법령 대응 (2026-11 보완): 허가 검증 · 집단민원현장 · 특수경비 · 동의 기록
+-- =============================================================
+alter table public.vendors  add column if not exists licenses text[] not null default '{}';     -- 경비업 허가 업무
+alter table public.vendors  add column if not exists license_no text;                            -- 경비업 허가번호
+alter table public.vendors  add column if not exists sanitation_no text;                         -- 건물위생관리업 신고번호
+alter table public.vendors  add column if not exists special_agent text;                         -- 특수경비 경비대행업자
+alter table public.vendors  add column if not exists docs jsonb not null default '[]';           -- 허가증 등 [{name, path}]
+alter table public.vendors  add column if not exists is_operator boolean not null default false; -- 운영사 직영
+alter table public.requests add column if not exists collective_site text not null default '';  -- 집단민원현장 유형
+alter table public.requests add column if not exists facility_type text;                         -- 특수경비 시설 유형
+alter table public.profiles add column if not exists consents jsonb not null default '{}';
+
+-- 분야 ↔ 필요 허가 (assets/js/config.js 의 CATEGORY_REQUIRES 와 동일하게 유지)
+create or replace function public.category_allowed(p_category text, p_licenses text[], p_sanitation text) returns boolean
+language sql immutable as $$
+  select case p_category
+    when '시설경비'          then '시설경비' = any(p_licenses)
+    when '신변보호'          then '신변보호' = any(p_licenses)
+    when '혼잡·교통유도'     then '혼잡·교통유도경비' = any(p_licenses)
+    when '이주관리·범죄예방' then '시설경비' = any(p_licenses)
+    when '행정대집행지원'    then '시설경비' = any(p_licenses)
+    when '특수경비'          then '특수경비' = any(p_licenses)
+    when '청소대행'          then coalesce(p_sanitation, '') <> ''
+    else false end;
+$$;
+
+create or replace function public.validate_vendor() returns trigger
+language plpgsql as $$
+declare c text;
+begin
+  foreach c in array new.categories loop
+    if not public.category_allowed(c, new.licenses, new.sanitation_no) then
+      raise exception '허가(신고)가 없는 분야는 선택할 수 없습니다: %', c;
+    end if;
+  end loop;
+  if array_length(new.licenses, 1) > 0 and coalesce(new.license_no, '') = '' then
+    raise exception '경비업 허가번호가 필요합니다.';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_validate_vendor on public.vendors;
+create trigger trg_validate_vendor before insert or update on public.vendors for each row execute function public.validate_vendor();
+
+-- 업체가 직영 표시·심사상태를 스스로 바꾸지 못하게 + 허가 정보 변경 시 재심사
+create or replace function public.protect_vendor_fields() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if not public.is_admin() then
+    new.rating := old.rating; new.review_count := old.review_count; new.owner_id := old.owner_id;
+    new.is_operator := old.is_operator; new.admin_memo := old.admin_memo;
+    if old.status = 'rejected'
+       or new.licenses is distinct from old.licenses
+       or new.license_no is distinct from old.license_no
+       or new.sanitation_no is distinct from old.sanitation_no
+       or new.docs is distinct from old.docs then
+      new.status := 'pending';
+    else
+      new.status := old.status;
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop policy if exists "vendors insert" on public.vendors;
+create policy "vendors insert" on public.vendors for insert
+  with check (owner_id = auth.uid() and status = 'pending' and is_operator = false);
+
+-- 특수경비: 사진 첨부 금지, 시설 유형 필수
+alter table public.requests drop constraint if exists requests_special_rules;
+alter table public.requests add constraint requests_special_rules check (
+  category <> '특수경비' or (coalesce(array_length(photos, 1), 0) = 0 and coalesce(facility_type, '') <> '')
+);
+
+-- 업체는 "자기 분야·지역에 맞는" 공개 요청만 조회 (특수경비 요청은 특수경비 허가 업체만)
+create or replace function public.vendor_matches(p_category text, p_region text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from vendors v
+    where v.owner_id = auth.uid() and v.status = 'approved'
+      and p_category = any (v.categories)
+      and ('전국' = any (v.regions) or p_region = '전국' or p_region = any (v.regions))
+  );
+$$;
+drop policy if exists "requests read" on public.requests;
+create policy "requests read" on public.requests for select using (
+  customer_id = auth.uid() or public.is_admin()
+  or (public.my_vendor_id() is not null and (
+        (status = 'open' and target_vendor_id is null and public.vendor_matches(category, region))
+        or target_vendor_id = public.my_vendor_id()
+        or public.vendor_quoted(requests.id)
+  ))
+);
+
+-- 견적 제출도 매칭되는 요청에만
+drop policy if exists "quotes insert" on public.quotes;
+create policy "quotes insert" on public.quotes for insert with check (
+  vendor_id = public.my_vendor_id() and status = 'submitted' and public.request_is_open(request_id)
+  and exists (select 1 from public.requests r where r.id = request_id)  -- requests RLS 로 매칭 여부 확인
+);
+
+-- 가입 동의 기록
+create or replace function public.handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, name, phone, email, role, consents)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', ''),
+    new.raw_user_meta_data->>'phone',
+    new.email,
+    case when new.raw_user_meta_data->>'role' = 'vendor' then 'vendor' else 'customer' end,
+    jsonb_build_object(
+      'terms_at', case when (new.raw_user_meta_data->>'terms_agreed')::boolean then now() end,
+      'privacy_at', case when (new.raw_user_meta_data->>'privacy_agreed')::boolean then now() end,
+      'marketing', coalesce((new.raw_user_meta_data->>'marketing')::boolean, false)
+    )
+  );
+  return new;
+end $$;
+
+-- 업체 제출 서류 (비공개): 본인 업로드, 본인·관리자만 열람
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('vendor-docs', 'vendor-docs', false, 5242880, array['image/jpeg', 'image/png', 'application/pdf'])
+on conflict (id) do update set public = false, file_size_limit = 5242880, allowed_mime_types = array['image/jpeg', 'image/png', 'application/pdf'];
+
+drop policy if exists "vendor docs upload" on storage.objects;
+create policy "vendor docs upload" on storage.objects for insert to authenticated
+  with check (bucket_id = 'vendor-docs' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "vendor docs read" on storage.objects;
+create policy "vendor docs read" on storage.objects for select to authenticated
+  using (bucket_id = 'vendor-docs' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+
+-- =============================================================
 --  관리자 지정: 가입 후 아래 이메일을 바꿔 실행하세요.
 --  update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'admin@your-company.com');

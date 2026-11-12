@@ -2,7 +2,7 @@
 //  관리자 콘솔 (/admin)
 // =============================================================
 import { $, $$, esc, won, date, datetime, badge, toast, renderPhotos, store, CATEGORIES, REGIONS, regionLabel } from "./ui.js";
-import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS } from "./config.js";
+import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES } from "./config.js";
 
 // ---------- 인증 ----------
 const me = await store.currentUser();
@@ -228,11 +228,25 @@ function vendorDrawer(v, stat) {
   openDrawer(v.company, `
     <p>${vBadge(v.status)}</p>
     <dl class="kv mt"><dt>대표자</dt><dd>${esc(v.ceo)}</dd><dt>사업자번호</dt><dd>${esc(v.biz_no)}</dd><dt>연락처</dt><dd>${esc(v.phone)}</dd><dt>이메일</dt><dd>${esc(v.email)}</dd>
-      <dt>주소</dt><dd>${esc(v.address || "-")}</dd><dt>보유 허가</dt><dd>${esc(v.license_info || "-")}</dd><dt>서비스 분야</dt><dd>${esc(v.categories.join(", "))}</dd><dt>서비스 지역</dt><dd>${esc(regionLabel(v.regions))}</dd>
+      <dt>주소</dt><dd>${esc(v.address || "-")}</dd>
+      <dt>경비업 허가</dt><dd>${(v.licenses || []).map((l) => badge(l, "navy")).join(" ") || "-"}<br><small class="muted">허가번호 ${esc(v.license_no || "-")}</small></dd>
+      <dt>건물위생관리업</dt><dd>${esc(v.sanitation_no || "-")}</dd>
+      ${(v.licenses || []).includes("특수경비") ? `<dt>경비대행업자</dt><dd>${esc(v.special_agent || "미입력")}</dd>` : ""}
+      <dt>기타 허가</dt><dd>${esc(v.license_info || "-")}</dd><dt>서비스 분야</dt><dd>${esc(v.categories.join(", "))}</dd><dt>서비스 지역</dt><dd>${esc(regionLabel(v.regions))}</dd>
       <dt>평점</dt><dd>★ ${v.rating || "-"} (${v.review_count || 0})</dd><dt>실적</dt><dd>견적 ${s.q}건 · 선정 ${s.a}건 · 거래액 ${won(s.amt)}</dd><dt>등록일</dt><dd>${date(v.created_at)}</dd></dl>
     <h4>업체 소개</h4><p style="white-space:pre-wrap;font-size:14px">${esc(v.intro)}</p>
+    <h4>제출 서류</h4><div class="doc-list" id="vDocs"><span class="muted">불러오는 중...</span></div>
     <h4>심사 체크리스트</h4>
-    <p class="muted" style="font-size:13px">사업자등록 상태(국세청), 경비업 허가(관할 시·도경찰청), 보험 가입 여부를 확인한 뒤 승인하세요.</p>
+    <ul style="font-size:13.5px;margin-left:18px;line-height:1.9">
+      <li>사업자등록 상태 조회 (국세청 홈택스 — 휴·폐업 여부)</li>
+      <li>경비업 허가증의 <b>법인명·허가번호·허가 업무</b>가 입력값과 일치하는지 (필요 시 관할 시·도경찰청 확인)</li>
+      <li>선택한 서비스 분야가 허가 업무 범위 안인지 (시스템이 자동 제한, 서류로 재확인)</li>
+      <li>특수경비: 특수경비업 허가 + 경비대행업자 지정 신고 여부</li>
+      <li>청소대행: 건물위생관리업 신고증</li>
+      <li>배상책임보험 가입 여부 (권장)</li>
+    </ul>
+    <h4>운영사 직영 표시</h4>
+    <label class="flex" style="font-size:14px"><input type="checkbox" id="isOp" style="width:auto" ${v.is_operator ? "checked" : ""}> 이 업체는 플랫폼 운영사(와이드가드)가 직접 운영함 — 고객 화면에 '운영사 직영' 표시</label>
     <h4>관리자 메모 <span class="muted" style="font-weight:500">(업체에 보이지 않음)</span></h4>
     <textarea id="memo" style="min-height:90px" placeholder="심사 내용, 반려 사유, 특이사항">${esc(v.admin_memo || "")}</textarea>
     <button class="p-btn p-btn-line p-btn-sm mt" id="saveMemo">메모 저장</button>`,
@@ -241,6 +255,10 @@ function vendorDrawer(v, stat) {
      ${v.status === "approved" ? `<button class="p-btn p-btn-bad" data-s="rejected">활동 정지</button>` : ""}
      <a class="p-btn p-btn-line" href="/platform/vendor?id=${v.id}" target="_blank">공개 페이지</a>`);
   $("#saveMemo").onclick = async () => { await store.updateVendorAdmin(v.id, { admin_memo: $("#memo").value }); toast("메모를 저장했습니다."); };
+  $("#isOp").onchange = async (e) => { await store.updateVendorAdmin(v.id, { is_operator: e.target.checked }); toast(e.target.checked ? "운영사 직영으로 표시합니다." : "직영 표시를 해제했습니다."); };
+  store.getDocUrls(v).then((docs) => {
+    $("#vDocs").innerHTML = docs.map((d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener" download="${esc(d.name)}">📄 ${esc(d.name)}</a>`).join("") || `<span class="muted">제출된 서류가 없습니다.</span>`;
+  });
   $$("#drawerFoot [data-s]").forEach((b) => (b.onclick = async () => {
     const label = b.textContent.trim();
     if (!confirm(`${v.company}을(를) '${label}' 처리할까요?`)) return;
@@ -271,7 +289,7 @@ async function requestsView(params) {
     rows = requests.filter((r) => (!st || (st === "noquote" ? r.status === "open" && !qBy[r.id] : r.status === st)) && (!c || r.category === c) && (!rg || r.region === rg) && (!q || `${r.title}${r.customer_name}`.includes(q)));
     $("#count").textContent = `${rows.length}건`;
     $("#tb").innerHTML = rows.map((r) => `<tr class="click" data-id="${r.id}">
-      <td><b>${esc(r.title)}</b>${r.target_vendor_id ? ` ${badge("지정", "navy")}` : ""}</td><td>${esc(r.customer_name)}</td><td class="sm">${esc(r.category)}</td><td class="sm">${esc(r.region)}</td><td class="sm">${esc(r.service_date)}</td>
+      <td><b>${esc(r.title)}</b>${r.target_vendor_id ? ` ${badge("지정", "navy")}` : ""}${r.category === "특수경비" ? ` ${badge("🔒 보안", "navy")}` : ""}${r.collective_site ? ` ${badge("집단민원", "warn")}` : ""}</td><td>${esc(r.customer_name)}</td><td class="sm">${esc(r.category)}</td><td class="sm">${esc(r.region)}</td><td class="sm">${esc(r.service_date)}</td>
       <td class="num">${r.budget ? won(r.budget) : "협의"}</td><td class="num">${(qBy[r.id] || []).length}</td><td class="sm">${r.photos?.length ? "📷 " + r.photos.length : "-"}</td><td>${rBadge(r.status)}</td><td class="sm">${date(r.created_at)}</td></tr>`).join("")
       || `<tr><td colspan="10" class="empty">요청이 없습니다.</td></tr>`;
     $$("#tb tr.click").forEach((tr) => (tr.onclick = () => requestDrawer(requests.find((r) => r.id === tr.dataset.id), qBy, payments, vendors)));
@@ -287,7 +305,7 @@ async function requestDrawer(r, qBy, payments, vendors) {
   const logs = await Promise.all(threads.map(async (v) => ({ v, ms: await store.listMessages(r.id, v.id) })));
   const target = r.target_vendor_id ? vendors.find((v) => v.id === r.target_vendor_id) : null;
   openDrawer(r.title, `
-    <p>${rBadge(r.status)} ${target ? badge("지정: " + target.company, "navy") : ""}</p>
+    <p>${rBadge(r.status)} ${target ? badge("지정: " + target.company, "navy") : ""} ${r.category === "특수경비" ? badge("🔒 특수경비 · " + (r.facility_type || ""), "navy") : ""} ${r.collective_site ? badge("집단민원현장: " + (COLLECTIVE_SITES[r.collective_site] || r.collective_site), "warn") : ""}</p>
     <dl class="kv mt"><dt>고객</dt><dd>${esc(r.customer_name)}</dd><dt>분야 / 지역</dt><dd>${esc(r.category)} · ${esc(r.region)}</dd><dt>희망 시작일</dt><dd>${esc(r.service_date)}</dd>
       <dt>예산</dt><dd>${r.budget ? won(r.budget) : "협의"}</dd><dt>등록일</dt><dd>${datetime(r.created_at)}</dd></dl>
     <h4>상세 내용</h4><p style="white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:10px;font-size:14px">${esc(r.details)}</p>

@@ -30,7 +30,13 @@
         <div class="field"><label>연락처<em>*</em></label><input name="phone" required placeholder="010-0000-0000"></div>
         <div class="field"><label>이메일<em>*</em></label><input type="email" name="email" required autocomplete="email"></div>
         <div class="field"><label>비밀번호<em>*</em></label><input type="password" name="password" required minlength="8" autocomplete="new-password"><small>8자 이상</small></div>
-        <label class="flex mb" style="font-size:14px"><input type="checkbox" required style="width:auto"> 이용약관 및 개인정보 수집·이용에 동의합니다.</label>
+        <div class="consents mb">
+          <label class="flex" style="font-size:14px;font-weight:700"><input type="checkbox" id="agreeAll" style="width:auto"> 전체 동의</label>
+          <label class="flex" style="font-size:14px"><input type="checkbox" class="agree" required style="width:auto"> [필수] <a href="/platform/terms" target="_blank" style="text-decoration:underline">이용약관</a> 동의</label>
+          <label class="flex" style="font-size:14px"><input type="checkbox" class="agree" required style="width:auto"> [필수] <a href="/platform/privacy" target="_blank" style="text-decoration:underline">개인정보 수집·이용</a> 동의 <small class="muted">(이름·연락처·이메일, 회원 탈퇴 시까지)</small></label>
+          <label class="flex" style="font-size:14px"><input type="checkbox" class="agree" required style="width:auto"> [필수] 만 14세 이상입니다</label>
+          <label class="flex" style="font-size:14px"><input type="checkbox" class="agree" name="marketing" value="1" style="width:auto"> [선택] 이벤트·혜택 정보 수신 동의</label>
+        </div>
         <button class="p-btn" style="width:100%">회원가입</button>
       </form>
 
@@ -61,8 +67,9 @@ $("#inForm").onsubmit = async (e) => {
   e.preventDefault(); const f = new FormData(e.target);
   try { await store.signIn(f.get("email"), f.get("password")); go(); } catch (err) { toast(err.message, "bad"); }
 };
+$("#agreeAll").onchange = (e) => $$(".agree").forEach((c) => (c.checked = e.target.checked));
 $("#upForm").onsubmit = async (e) => {
-  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+  e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); f.marketing = !!f.marketing;
   try {
     const u = await store.signUp(f);
     location.href = u.role === "vendor" ? "/platform/vendor-join" : next;

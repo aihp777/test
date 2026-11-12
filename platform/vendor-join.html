@@ -9,11 +9,11 @@
 </head>
 <body>
 <main>
-  <div class="p-container" style="max-width:800px">
-    <div class="page-head"><h1>동종업체 등록</h1><p>등록 후 관리자 승인이 완료되면 분야·지역에 맞는 견적 요청을 받을 수 있습니다.</p></div>
+  <div class="p-container" style="max-width:820px">
+    <div class="page-head"><h1>동종업체 등록</h1><p>허가증(신고증) 확인 후 관리자 승인이 완료되면, 허가받은 분야·지역의 견적 요청을 받을 수 있습니다.</p></div>
     <div id="status"></div>
     <form class="card" id="form">
-      <h2>기본 정보</h2>
+      <h2>1. 기본 정보</h2>
       <div class="row2">
         <div class="field"><label>상호(법인명)<em>*</em></label><input name="company" required></div>
         <div class="field"><label>대표자명<em>*</em></label><input name="ceo" required></div>
@@ -24,31 +24,72 @@
       </div>
       <div class="row2">
         <div class="field"><label>이메일<em>*</em></label><input type="email" name="email" required></div>
-        <div class="field"><label>사업장 주소</label><input name="address"></div>
+        <div class="field"><label>사업장 주소<em>*</em></label><input name="address" required></div>
       </div>
-      <div class="field"><label>보유 허가 · 인증</label><input name="license_info" placeholder="예) 경비업 허가증(시설·신변보호), 분사기 허가증"><small>경비업은 관할 시·도경찰청 허가가 필요합니다. 승인 심사 시 허가증 사본을 요청할 수 있습니다.</small></div>
 
-      <h2 class="mt">서비스 분야<em style="color:var(--bad)">*</em></h2>
+      <h2 class="mt">2. 허가 · 신고 정보</h2>
+      <div class="notice info"><b>경비업법상 경비업무는 시·도경찰청 허가를 받은 법인만 수행할 수 있습니다.</b>
+        누구든지 무허가 업체에 경비업무를 도급할 수 없으므로(경비업법 제7조의2), 허가받은 업무에 해당하는 분야만 선택할 수 있습니다.</div>
+      <div class="field"><label>경비업 허가 업무 <span class="muted" style="font-weight:500">(허가증에 기재된 업무 모두 선택)</span></label>
+        <div class="chips" id="lics"></div></div>
+      <div class="row2">
+        <div class="field"><label>경비업 허가번호</label><input name="license_no" placeholder="예) 경기남부청 제0000호"><small>경비업 허가가 있으면 필수</small></div>
+        <div class="field"><label>건물위생관리업 신고번호</label><input name="sanitation_no" placeholder="청소대행 업체만 (공중위생관리법)"><small>입력 시 '청소대행' 분야 선택 가능</small></div>
+      </div>
+      <div class="field" id="specialBox" hidden>
+        <label>경비대행업자 지정 현황<em>*</em></label>
+        <input name="special_agent" placeholder="예) ○○경비(주) — 시·도경찰청 지정 신고 완료">
+        <small>특수경비업자는 경비대행업자를 지정해 신고해야 합니다(경비업법 제7조⑦).</small>
+      </div>
+      <div class="field"><label>기타 허가·자격</label><input name="license_info" placeholder="예) 분사기 소지허가, 경비지도사 ○명"></div>
+      <div class="field">
+        <label>허가증 · 신고증 사본<em id="docReq">*</em></label>
+        <label class="uploader" id="drop"><input type="file" id="docs" accept="image/jpeg,image/png,application/pdf" multiple>
+          📎 <b>파일 선택</b> (경비업 허가증, 건물위생관리업 신고증, 사업자등록증 · JPG/PNG/PDF, 파일당 5MB 이하)</label>
+        <div class="doc-list" id="docList"></div>
+        <small>제출 서류는 관리자 심사에만 사용되며 고객에게 공개되지 않습니다.</small>
+      </div>
+
+      <h2 class="mt">3. 서비스 분야<em style="color:var(--bad)">*</em></h2>
+      <p class="muted mb" id="catHint" style="font-size:13.5px"></p>
       <div class="chips mb" id="cats"></div>
-      <h2>서비스 지역<em style="color:var(--bad)">*</em></h2>
+
+      <h2>4. 서비스 지역<em style="color:var(--bad)">*</em></h2>
       <div class="chips" style="margin-bottom:10px"><label><input type="checkbox" id="nation" name="regions" value="전국"><span>전국 (모든 지역 요청 받기)</span></label></div>
       <div class="flex" id="groups" style="margin-bottom:10px"></div>
       <div class="chips mb" id="regs"></div>
 
-      <div class="field"><label>업체 소개<em>*</em></label><textarea name="intro" required placeholder="주요 실적, 보유 인력, 강점 등을 소개해 주세요."></textarea></div>
+      <div class="field"><label>업체 소개<em>*</em></label><textarea name="intro" required placeholder="주요 실적, 보유 인력(경비원·경비지도사 수), 장비, 강점 등을 소개해 주세요."></textarea></div>
+      <label class="flex mb" style="font-size:14px"><input type="checkbox" required style="width:auto"> 입력한 허가·신고 정보가 사실이며, 허가 범위를 벗어난 업무는 수행하지 않을 것을 확인합니다. (허위 등록 시 승인 취소)</label>
       <button class="p-btn" style="width:100%" id="submit">등록 신청</button>
     </form>
   </div>
 </main>
 <script type="module">
 import { renderHeader, requireLogin, $, $$, esc, badge, toast, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
-import { VENDOR_STATUS, REGION_GROUPS, NATIONWIDE } from "/assets/js/config.js";
+import { VENDOR_STATUS, REGION_GROUPS, NATIONWIDE, LICENSES, SANITATION, CATEGORY_REQUIRES, allowedCategories, IS_DEMO } from "/assets/js/config.js";
+import { vendorLicenses } from "/assets/js/store.js";
 await renderHeader();
 await requireLogin();
-const chip = (name, v) => `<label><input type="checkbox" name="${name}" value="${esc(v)}"><span>${esc(v)}</span></label>`;
-$("#cats").innerHTML = CATEGORIES.map((c) => chip("categories", c)).join("");
+const chip = (name, v, label = v) => `<label><input type="checkbox" name="${name}" value="${esc(v)}"><span>${esc(label)}</span></label>`;
+$("#lics").innerHTML = LICENSES.map((l) => chip("licenses", l)).join("");
+$("#cats").innerHTML = CATEGORIES.map((c) => `<label title="필요: ${esc(CATEGORY_REQUIRES[c].join("·"))}"><input type="checkbox" name="categories" value="${esc(c)}"><span>${esc(c)}</span></label>`).join("");
 $("#regs").innerHTML = REGIONS.map((r) => chip("regions", r)).join("");
 $("#groups").innerHTML = Object.keys(REGION_GROUPS).map((g) => `<button type="button" class="p-btn p-btn-line p-btn-sm" data-g="${g}">+ ${g}</button>`).join("");
+
+// --- 허가 → 선택 가능 분야 동기화
+const currentLicenses = () => [...$$("input[name=licenses]:checked").map((i) => i.value), ...($("[name=sanitation_no]").value.trim() ? [SANITATION] : [])];
+function syncCategories() {
+  const lic = currentLicenses(); const ok = allowedCategories(lic);
+  $$("input[name=categories]").forEach((i) => { const on = ok.includes(i.value); i.disabled = !on; if (!on) i.checked = false; });
+  $("#catHint").textContent = ok.length ? `선택 가능: ${ok.join(", ")}` : "먼저 위에서 허가 업무 또는 건물위생관리업 신고번호를 입력하세요.";
+  $("#specialBox").hidden = !lic.includes("특수경비");
+  $("[name=special_agent]").required = lic.includes("특수경비");
+}
+$$("input[name=licenses]").forEach((i) => (i.onchange = syncCategories));
+$("[name=sanitation_no]").oninput = syncCategories;
+
+// --- 지역
 const regInputs = () => $$("#regs input");
 const syncNation = () => { const on = $("#nation").checked; regInputs().forEach((i) => { i.disabled = on; if (on) i.checked = false; }); $$("#groups button").forEach((b) => (b.disabled = on)); };
 $("#nation").onchange = syncNation;
@@ -57,26 +98,53 @@ $$("#groups button").forEach((b) => (b.onclick = () => {
   const turnOn = !all.every((i) => i.checked); all.forEach((i) => (i.checked = turnOn));
 }));
 
+// --- 서류 첨부
+const MAX_MB = IS_DEMO ? 2 : 5;
+let docs = []; // {name, blob}
+const drawDocs = () => {
+  $("#docList").innerHTML = docs.map((d, i) => `<span>📄 ${esc(d.name)} <button type="button" data-i="${i}" style="border:0;background:none;cursor:pointer">✕</button></span>`).join("");
+  $$("#docList button").forEach((b) => (b.onclick = () => { docs.splice(+b.dataset.i, 1); drawDocs(); }));
+};
+$("#docs").onchange = (e) => {
+  for (const f of e.target.files) {
+    if (!/^(image\/(jpeg|png)|application\/pdf)$/.test(f.type)) { toast(`${f.name}: JPG·PNG·PDF만 가능합니다.`, "bad"); continue; }
+    if (f.size > MAX_MB * 1024 * 1024) { toast(`${f.name}: ${MAX_MB}MB 이하만 가능합니다.${IS_DEMO ? " (데모 모드 제한)" : ""}`, "bad"); continue; }
+    if (docs.length >= 5) { toast("서류는 최대 5개까지 첨부할 수 있습니다.", "bad"); break; }
+    docs.push({ name: f.name, blob: f });
+  }
+  e.target.value = ""; drawDocs();
+};
+
+// --- 기존 정보 불러오기
+const FIELDS = ["company", "ceo", "biz_no", "phone", "email", "address", "license_no", "sanitation_no", "special_agent", "license_info", "intro"];
 const mine = await store.myVendor();
 if (mine) {
   const tone = { approved: "ok", pending: "warn", rejected: "bad" }[mine.status];
-  $("#status").innerHTML = `<div class="card mb flex between"><div>현재 상태 ${badge(VENDOR_STATUS[mine.status], tone)} <span class="muted">정보를 수정하면 다시 저장됩니다.</span></div><a class="p-btn p-btn-sm" href="/platform/dashboard">마이페이지</a></div>`;
+  $("#status").innerHTML = `<div class="card mb flex between"><div>현재 상태 ${badge(VENDOR_STATUS[mine.status], tone)} <span class="muted">허가 정보를 바꾸거나 서류를 추가하면 재심사(승인 대기)로 전환됩니다.</span></div><a class="p-btn p-btn-sm" href="/platform/dashboard">마이페이지</a></div>
+    ${(mine.docs || []).length ? `<p class="muted mb" style="font-size:13.5px">제출된 서류: ${mine.docs.map((d) => esc(d.name)).join(", ")}</p>` : ""}`;
   const f = $("#form");
-  ["company", "ceo", "biz_no", "phone", "email", "address", "license_info", "intro"].forEach((k) => (f[k].value = mine[k] || ""));
-  $$("input[name=categories]").forEach((i) => (i.checked = mine.categories.includes(i.value)));
+  FIELDS.forEach((k) => (f[k].value = mine[k] || ""));
+  $$("input[name=licenses]").forEach((i) => (i.checked = (mine.licenses || []).includes(i.value)));
+  syncCategories();
+  $$("input[name=categories]").forEach((i) => (i.checked = !i.disabled && mine.categories.includes(i.value)));
   $$("input[name=regions]").forEach((i) => (i.checked = mine.regions.includes(i.value)));
   syncNation();
+  $("#docReq").hidden = true;
   $("#submit").textContent = "정보 저장";
-}
+} else syncCategories();
+
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  const data = Object.fromEntries(["company", "ceo", "biz_no", "phone", "email", "address", "license_info", "intro"].map((k) => [k, fd.get(k)]));
+  const data = Object.fromEntries(FIELDS.map((k) => [k, (fd.get(k) || "").trim()]));
+  data.licenses = fd.getAll("licenses");
   data.categories = fd.getAll("categories");
   data.regions = $("#nation").checked ? [NATIONWIDE] : fd.getAll("regions").filter((r) => r !== NATIONWIDE);
   if (!data.categories.length || !data.regions.length) return toast("서비스 분야와 지역을 1개 이상 선택하세요.", "bad");
-  try { await store.registerVendor(data); toast("저장되었습니다."); setTimeout(() => (location.href = "/platform/dashboard"), 700); }
-  catch (err) { toast(err.message, "bad"); }
+  if (!mine && !docs.length) return toast("허가증(신고증) 사본을 첨부해 주세요.", "bad");
+  const btn = $("#submit"); btn.disabled = true;
+  try { await store.registerVendor(data, docs); toast("저장되었습니다. 관리자 심사 후 승인됩니다."); setTimeout(() => (location.href = "/platform/dashboard"), 900); }
+  catch (err) { toast(err.message, "bad"); btn.disabled = false; }
 };
 </script>
 </body>

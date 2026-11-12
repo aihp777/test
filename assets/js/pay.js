@@ -32,7 +32,7 @@ export async function startPayment(quote, me) {
       <span class="muted">(포함) 플랫폼 중개수수료 ${Math.round(settings.fee_rate * 100)}%</span><b class="muted">${won(fee)}</b>
       <span class="total">결제 금액</span><b class="total">${won(quote.amount)}</b>
     </div>
-    <p class="muted" style="font-size:13px">결제 금액은 플랫폼이 보관하며, 서비스 완료 확인 후 수수료를 제외하고 업체에 정산됩니다.</p>
+    <p class="muted" style="font-size:13px">결제대금은 전자지급결제대행사(PG, 토스페이먼츠)가 보관하며, 서비스 완료 확인 후 중개수수료를 제외한 금액이 PG를 통해 업체에 지급됩니다. 용역 계약의 당사자는 고객과 업체입니다.</p>
     ${IS_DEMO || !CONFIG.TOSS_CLIENT_KEY ? `<p class="badge warn mt">테스트 결제 (실제 결제가 일어나지 않습니다)</p>` : ""}
     <div class="flex mt"><button class="p-btn" id="payGo" style="flex:1">${won(quote.amount)} 결제</button><button class="p-btn p-btn-line" id="payCancel">취소</button></div>`);
   m.querySelector("#payCancel").onclick = () => m.classList.remove("show");

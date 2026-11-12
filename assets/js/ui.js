@@ -1,4 +1,16 @@
-import { CONFIG, IS_DEMO, CATEGORIES, REGIONS } from "./config.js";
+import { CONFIG, IS_DEMO, CATEGORIES, REGIONS, COMPANY, pending } from "./config.js";
+
+// 사이버몰 운영자 표시 (전자상거래법 제10조) + 통신판매중개자 고지 (제20조①)
+export function companyFooter() {
+  const C = COMPANY;
+  return `<div class="p-container">
+    <p class="f-links"><a href="/platform/terms">이용약관</a> · <a href="/platform/privacy"><b>개인정보처리방침</b></a> · <a href="/">회사 홈페이지</a></p>
+    <p>상호 ${esc(C.name)} · 대표 ${esc(C.ceo)} · 주소 ${esc(C.address)} · 전화 ${esc(C.tel)}${C.email ? " · 이메일 " + esc(C.email) : ""}<br>
+    사업자등록번호 ${esc(pending(C.bizNo))} · 통신판매업 신고번호 ${esc(pending(C.mailOrderNo, "신고 진행 중"))} · 경비업 허가 ${esc(pending(C.securityLicenseNo))} · 개인정보보호책임자 ${esc(C.privacyOfficer)} · 호스팅 ${esc(C.hosting)}</p>
+    <p class="f-notice">${esc(C.name)}는 「와이드가드 매칭」에서 <b>통신판매중개자</b>로서 거래 당사자가 아니며, 입점 업체가 등록한 정보와 업체가 제공하는 용역에 대한 책임은 각 업체에 있습니다.
+    다만 ${esc(C.name)}가 '운영사 직영'으로 표시된 견적을 직접 제공하는 경우에는 용역 제공자로서 책임을 집니다.</p>
+  </div>`;
+}
 import { store } from "./store.js";
 
 export const $ = (s, el = document) => el.querySelector(s);
@@ -86,7 +98,7 @@ export async function renderHeader() {
 
   const footer = document.createElement("footer");
   footer.className = "p-footer";
-  footer.innerHTML = `<div class="p-container">주식회사 와이드가드 · 대표 김정환 · 경기도 김포시 풍무2로 25, 2층 2-2호 · T. 031-945-2001<br><a href="/">회사 홈페이지</a> · 통신판매중개자로서 거래 당사자가 아니며, 업체가 등록한 정보 및 거래에 대한 책임은 각 업체에 있습니다.</div>`;
+  footer.innerHTML = companyFooter();
   document.body.appendChild(footer);
   return me;
 }

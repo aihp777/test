@@ -31,7 +31,8 @@ async function load() {
   $("#count").textContent = `${vs.length}개 업체`;
   $("#list").innerHTML = vs.map((v) => `
     <div class="vcard">
-      <div class="flex between"><h3>${esc(v.company)}</h3><span class="star">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0})</small></span></div>
+      <div class="flex between"><h3>${esc(v.company)} ${v.is_operator ? `<span class="op-badge">운영사 직영</span>` : ""}</h3><span class="star">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0})</small></span></div>
+      <div>${(v.licenses || []).map((l) => `<span class="lic-tag">✔ ${esc(l)} 허가</span>`).join("")}${v.sanitation_no ? `<span class="lic-tag">✔ 건물위생관리업</span>` : ""}</div>
       <div class="tags">${v.categories.map((c) => `<span class="badge teal">${esc(c)}</span>`).join("")}</div>
       <p>${esc(v.intro)}</p>
       <small class="muted">지역: ${esc(regionLabel(v.regions))}</small>

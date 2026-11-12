@@ -1,7 +1,24 @@
 // =============================================================
 //  데이터 계층: 데모(localStorage) / 운영(Supabase) 공통 인터페이스
 // =============================================================
-import { CONFIG, IS_DEMO, NATIONWIDE, covers } from "./config.js";
+import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES } from "./config.js";
+
+// 업체 보유 허가·신고 목록
+export const vendorLicenses = (v) => [...(v.licenses || []), ...(v.sanitation_no ? [SANITATION] : [])];
+// 업체 등록 검증: 허가 없는 분야 선택 금지 (경비업법 제7조의2 무허가 도급 방지)
+function validateVendor(data) {
+  const allowed = allowedCategories(vendorLicenses(data));
+  const bad = (data.categories || []).filter((c) => !allowed.includes(c));
+  if (bad.length) throw new Error(`허가(신고)가 없는 분야는 선택할 수 없습니다: ${bad.join(", ")} → 필요: ${bad.map((c) => CATEGORY_REQUIRES[c].join("·")).join(" / ")}`);
+  if ((data.licenses || []).length && !String(data.license_no || "").trim()) throw new Error("경비업 허가번호를 입력해 주세요.");
+}
+// 견적 요청 검증: 특수경비는 사진 첨부 금지·시설 유형 필수 (국가중요시설 보안)
+function validateRequest(data, photos) {
+  if (data.category === SPECIAL) {
+    if (photos.length) throw new Error("특수경비 요청에는 보안상 사진을 첨부할 수 없습니다.");
+    if (!data.facility_type) throw new Error("특수경비 대상 시설 유형을 선택해 주세요.");
+  }
+}
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 const now = () => new Date().toISOString();
@@ -10,7 +27,7 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v3";
+const DB_KEY = "wg_platform_v4";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
@@ -20,19 +37,27 @@ function seed() {
   const v1u = { id: "u-v1", email: "vendor@demo.com", password: "demo1234", name: "김정환", phone: "031-945-2001", role: "vendor", created_at: t(300) };
   const v2u = { id: "u-v2", email: "vendor2@demo.com", password: "demo1234", name: "이대표", phone: "02-000-0000", role: "vendor", created_at: t(120) };
   const v3u = { id: "u-v3", email: "vendor3@demo.com", password: "demo1234", name: "박대표", phone: "032-000-0000", role: "vendor", created_at: t(1) };
+  const v4u = { id: "u-v4", email: "vendor4@demo.com", password: "demo1234", name: "최대표", phone: "032-111-0000", role: "vendor", created_at: t(200) };
   return {
-    users: [admin, cust, v1u, v2u, v3u],
+    users: [admin, cust, v1u, v2u, v3u, v4u],
     vendors: [
       { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "000-00-00000", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
-        categories: ["시설경비", "신변보호", "혼잡·교통유도", "이주관리·범죄예방", "행정대집행지원", "청소대행"], regions: [NATIONWIDE],
+        licenses: ["시설경비", "신변보호", "혼잡·교통유도경비"], license_no: "(데모) 허가번호 확인 후 입력", sanitation_no: "", docs: [], is_operator: true,
+        categories: ["시설경비", "신변보호", "혼잡·교통유도", "이주관리·범죄예방", "행정대집행지원"], regions: [NATIONWIDE],
         intro: "경찰청 허가법인. 재개발·재건축 이주관리, 대형 행사 경비, VIP 신변보호 다수 실적 보유.", license_info: "경비업 허가증, 분사기 허가증", status: "approved", rating: 4.9, review_count: 128, created_at: t(300) },
       { id: "v-2", owner_id: "u-v2", company: "한빛시큐리티(데모)", ceo: "이대표", biz_no: "000-00-00001", phone: "02-000-0000", email: "vendor2@demo.com", address: "서울특별시",
+        licenses: ["시설경비", "혼잡·교통유도경비"], license_no: "서울청 제0000호(데모)", sanitation_no: "", docs: [],
         categories: ["시설경비", "혼잡·교통유도"], regions: ["서울", "경기"], intro: "공연·행사 전문 경비업체 (데모 데이터)", license_info: "경비업 허가증", status: "approved", rating: 4.6, review_count: 41, created_at: t(120) },
       { id: "v-3", owner_id: "u-v3", company: "그린클린(데모)", ceo: "박대표", biz_no: "000-00-00002", phone: "032-000-0000", email: "vendor3@demo.com", address: "인천광역시",
-        categories: ["청소대행"], regions: ["인천", "경기"], intro: "빌딩·사무실 정밀 청소 (데모 데이터)", license_info: "", status: "pending", rating: 0, review_count: 0, created_at: t(1) },
+        licenses: [], license_no: "", sanitation_no: "인천 제2026-000호(데모)", docs: [],
+        categories: ["청소대행"], regions: ["인천", "경기"], intro: "빌딩·사무실 정밀 청소 (데모 데이터)", license_info: "건물위생관리업 신고", status: "pending", rating: 0, review_count: 0, created_at: t(1) },
+      { id: "v-4", owner_id: "u-v4", company: "국가특수경비(데모)", ceo: "최대표", biz_no: "000-00-00003", phone: "032-111-0000", email: "vendor4@demo.com", address: "인천광역시",
+        licenses: ["특수경비", "시설경비"], license_no: "인천청 제0000호(데모)", sanitation_no: "", docs: [], special_agent: "한빛시큐리티(데모) — 경비대행업자 지정 신고 완료(데모)",
+        categories: ["특수경비", "시설경비"], regions: [NATIONWIDE], intro: "국가중요시설 특수경비 전문 (데모 데이터). 특수경비원 상시 운용.", license_info: "특수경비업 허가증", status: "approved", rating: 4.8, review_count: 22, created_at: t(200) },
     ],
     requests: [
-      { id: "r-1", customer_id: "u-cust", customer_name: "김고객", category: "혼잡·교통유도", region: "경기", title: "가평 야외 축제 교통유도 인력 20명", details: "2일간 진행되는 야외 축제의 주차장·진입로 교통유도 및 현장 질서유지 인력이 필요합니다.", service_date: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), budget: 6000000, target_vendor_id: null, status: "open", selected_quote_id: null, created_at: t(2) },
+      { id: "r-1", customer_id: "u-cust", customer_name: "김고객", category: "혼잡·교통유도", region: "경기", title: "가평 야외 축제 교통유도 인력 20명", details: "2일간 진행되는 야외 축제의 주차장·진입로 교통유도 및 현장 질서유지 인력이 필요합니다.", service_date: new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10), budget: 6000000, target_vendor_id: null, collective_site: "event100", photos: [], status: "open", selected_quote_id: null, created_at: t(2) },
+      { id: "r-2", customer_id: "u-cust", customer_name: "김고객", category: "특수경비", region: "인천", title: "항만 보안구역 특수경비 용역 견적", details: "특수경비원 24시간 3교대 운용 견적 요청. 시설 세부 정보는 선정 업체와 보안서약 후 별도 제공.", service_date: new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10), budget: null, target_vendor_id: null, facility_type: "공항·항만", collective_site: "", photos: [], status: "open", selected_quote_id: null, created_at: t(1) },
     ],
     quotes: [
       { id: "q-1", request_id: "r-1", vendor_id: "v-2", vendor_company: "한빛시큐리티(데모)", amount: 5800000, message: "경비지도사 1명 포함 20명 투입, 무전기·경광봉 지참합니다.", status: "submitted", created_at: t(1) },
@@ -78,6 +103,7 @@ const save = (d) => {
 };
 const blobToDataURL = (b) => new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
 const PHOTO_BUCKET = "request-photos";
+const DOC_BUCKET = "vendor-docs";
 const strip = (u) => { if (!u) return null; const { password, ...rest } = u; return rest; };
 const byNewest = (a, b) => (a.created_at < b.created_at ? 1 : -1);
 
@@ -89,10 +115,11 @@ const demo = {
     const id = localStorage.getItem(SESSION_KEY); if (!id) return null;
     return strip(load().users.find((u) => u.id === id));
   },
-  async signUp({ email, password, name, phone, role }) {
+  async signUp({ email, password, name, phone, role, marketing }) {
     const d = load();
     if (d.users.some((u) => u.email === email)) throw new Error("이미 가입된 이메일입니다.");
-    const u = { id: uid(), email, password, name, phone, role: role === "vendor" ? "vendor" : "customer", created_at: now() };
+    const consents = { terms_at: now(), privacy_at: now(), marketing: !!marketing };
+    const u = { id: uid(), email, password, name, phone, role: role === "vendor" ? "vendor" : "customer", consents, created_at: now() };
     d.users.push(u); save(d); localStorage.setItem(SESSION_KEY, u.id); return strip(u);
   },
   async signIn(email, password) {
@@ -113,12 +140,20 @@ const demo = {
   },
   async getVendor(id) { return load().vendors.find((v) => v.id === id) || null; },
   async myVendor() { const me = await this.currentUser(); return me ? load().vendors.find((v) => v.owner_id === me.id) || null : null; },
-  async registerVendor(data) {
+  async registerVendor(data, docs = []) {
     const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
+    validateVendor(data);
     const d = load();
+    const newDocs = await Promise.all(docs.map(async (f) => ({ name: f.name, path: await blobToDataURL(f.blob) })));
     const existing = d.vendors.find((v) => v.owner_id === me.id);
-    if (existing) { Object.assign(existing, data, { status: existing.status === "approved" ? "approved" : "pending" }); save(d); return existing; }
-    const v = { id: uid(), owner_id: me.id, status: "pending", rating: 0, review_count: 0, created_at: now(), ...data };
+    if (existing) {
+      // 허가 정보가 바뀌면 재심사 (승인 → 승인 대기)
+      const licChanged = JSON.stringify(vendorLicenses(existing)) !== JSON.stringify(vendorLicenses(data)) || existing.license_no !== data.license_no;
+      Object.assign(existing, data, { docs: [...(existing.docs || []), ...newDocs], status: existing.status === "approved" && !licChanged && !newDocs.length ? "approved" : "pending" });
+      save(d); return existing;
+    }
+    if (!newDocs.length) throw new Error("허가증(신고증) 사본을 첨부해 주세요.");
+    const v = { id: uid(), owner_id: me.id, status: "pending", rating: 0, review_count: 0, created_at: now(), ...data, docs: newDocs };
     d.vendors.push(v);
     const u = d.users.find((x) => x.id === me.id); if (u.role === "customer") u.role = "vendor";
     save(d); return v;
@@ -128,12 +163,14 @@ const demo = {
   // --- requests
   async createRequest(data, photos = []) {
     const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
+    validateRequest(data, photos);
     const d = load();
     const urls = await Promise.all(photos.map(blobToDataURL));
     const r = { id: uid(), customer_id: me.id, customer_name: me.name, status: "open", selected_quote_id: null, target_vendor_id: null, created_at: now(), ...data, photos: urls };
     d.requests.push(r); save(d); return r;
   },
   async getPhotoUrls(r) { return r.photos || []; },
+  async getDocUrls(v) { return (v.docs || []).map((x) => ({ name: x.name, url: x.path })); },
   async getRequest(id) { return load().requests.find((r) => r.id === id) || null; },
   async listMyRequests() { const me = await this.currentUser(); return load().requests.filter((r) => r.customer_id === me.id).sort(byNewest); },
   async listMatchedRequests() {
@@ -247,9 +284,9 @@ const supa = {
     const p = ok(await c.from("profiles").select("*").eq("id", data.user.id).maybeSingle());
     return p ? { ...p, email: data.user.email } : { id: data.user.id, email: data.user.email, role: "customer", name: data.user.email };
   },
-  async signUp({ email, password, name, phone, role }) {
+  async signUp({ email, password, name, phone, role, marketing }) {
     const c = await client();
-    ok(await c.auth.signUp({ email, password, options: { data: { name, phone, role: role === "vendor" ? "vendor" : "customer" } } }));
+    ok(await c.auth.signUp({ email, password, options: { data: { name, phone, role: role === "vendor" ? "vendor" : "customer", terms_agreed: true, privacy_agreed: true, marketing: !!marketing } } }));
     const { data } = await c.auth.getSession();
     if (!data.session) throw new Error("가입 확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 로그인해 주세요.");
     return this.currentUser();
@@ -267,11 +304,21 @@ const supa = {
   },
   async getVendor(id) { const c = await client(); return ok(await c.from("vendors").select("*").eq("id", id).maybeSingle()); },
   async myVendor() { const c = await client(); const me = await this.currentUser(); if (!me) return null; return ok(await c.from("vendors").select("*").eq("owner_id", me.id).maybeSingle()); },
-  async registerVendor(data) {
+  async registerVendor(data, docs = []) {
     const c = await client(); const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
+    validateVendor(data);
     const ex = await this.myVendor();
-    const v = ex ? ok(await c.from("vendors").update(data).eq("id", ex.id).select().single())
-                 : ok(await c.from("vendors").insert({ ...data, owner_id: me.id }).select().single());
+    if (!ex && !docs.length) throw new Error("허가증(신고증) 사본을 첨부해 주세요.");
+    const uploaded = [];
+    for (const f of docs) {
+      const ext = f.blob.type === "application/pdf" ? "pdf" : "jpg";
+      const path = `${me.id}/${uid()}.${ext}`;
+      ok(await c.storage.from(DOC_BUCKET).upload(path, f.blob, { contentType: f.blob.type || "image/jpeg", upsert: false }));
+      uploaded.push({ name: f.name, path });
+    }
+    const payload = { ...data, docs: [...((ex && ex.docs) || []), ...uploaded] };
+    const v = ex ? ok(await c.from("vendors").update(payload).eq("id", ex.id).select().single())
+                 : ok(await c.from("vendors").insert({ ...payload, owner_id: me.id }).select().single());
     if (me.role === "customer") await c.from("profiles").update({ role: "vendor" }).eq("id", me.id);
     return v;
   },
@@ -279,6 +326,7 @@ const supa = {
 
   async createRequest(data, photos = []) {
     const c = await client(); const me = await this.currentUser(); if (!me) throw new Error("로그인이 필요합니다.");
+    validateRequest(data, photos);
     const paths = [];
     try {
       for (const b of photos) {
@@ -297,6 +345,12 @@ const supa = {
     const c = await client();
     const data = ok(await c.storage.from(PHOTO_BUCKET).createSignedUrls(r.photos, 3600));
     return data.filter((x) => x.signedUrl).map((x) => x.signedUrl);
+  },
+  async getDocUrls(v) {
+    if (!v.docs || !v.docs.length) return [];
+    const c = await client();
+    const data = ok(await c.storage.from(DOC_BUCKET).createSignedUrls(v.docs.map((x) => x.path), 600));
+    return data.map((x, i) => ({ name: v.docs[i].name, url: x.signedUrl })).filter((x) => x.url);
   },
   async getRequest(id) { const c = await client(); return ok(await c.from("requests").select("*").eq("id", id).maybeSingle()); },
   async listMyRequests() { const c = await client(); const me = await this.currentUser(); return ok(await c.from("requests").select("*").eq("customer_id", me.id).order("created_at", { ascending: false })); },

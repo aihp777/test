@@ -17,13 +17,30 @@
         <div class="field"><label>서비스 분야<em>*</em></label><select name="category" id="cat" required></select></div>
         <div class="field"><label>지역<em>*</em></label><select name="region" id="reg" required></select><small>여러 지역에 걸친 업무는 "전국"을 선택하고 상세 내용에 지역을 적어주세요.</small></div>
       </div>
+      <div id="specialBox" hidden>
+        <div class="notice secure"><b>🔒 특수경비 (국가중요시설) 보안 요청 모드</b>
+          <ul><li>특수경비업 허가를 받은 업체에게만 요청이 공개됩니다.</li>
+          <li>시설 명칭·정확한 위치·보안구역 구조·출입 절차 등 <b>보안 정보는 절대 기재하지 마세요.</b> 세부 정보는 업체 선정 후 보안서약을 거쳐 별도로 제공하세요.</li>
+          <li>보안상 사진 첨부는 비활성화됩니다. 공공기관은 관련 계약 법령(입찰 등)에 따른 절차를 우선 따르세요.</li></ul></div>
+        <div class="field"><label>대상 시설 유형<em>*</em></label><select name="facility_type" id="fac"></select></div>
+      </div>
       <div class="field"><label>제목<em>*</em></label><input name="title" required maxlength="80" placeholder="예) 아파트 단지 야간 시설경비 2명"></div>
       <div class="row2">
         <div class="field"><label>희망 시작일<em>*</em></label><input type="date" name="service_date" required id="dt"></div>
         <div class="field"><label>예산 (원)</label><input type="number" name="budget" min="0" step="10000" placeholder="협의 가능하면 비워두세요"></div>
       </div>
       <div class="field"><label>상세 내용<em>*</em></label><textarea name="details" required placeholder="장소, 기간, 필요 인원, 근무 시간, 특이사항 등을 적어주세요."></textarea></div>
-      <div class="field">
+      <div class="field" id="collectiveField">
+        <label>현장 성격 — 집단민원현장 해당 여부<em>*</em></label>
+        <select name="collective_site" id="col"></select>
+        <small>재개발·재건축 다툼, 행정대집행, 명도, 노사분쟁, 100명 이상 행사 등은 경비업법상 '집단민원현장'입니다.</small>
+        <div class="notice warn" id="colNotice" hidden><b>⚠ 집단민원현장 경비 안내 (경비업법)</b>
+          <ul><li>경비업체는 경비원 배치 <b>48시간 전까지 관할 경찰관서의 배치허가</b>를 받아야 합니다. 일정에 여유를 두세요.</li>
+          <li>현장에 <b>경비지도사가 배치</b>되어 경비원을 지도·감독합니다.</li>
+          <li>경비인력 <b>20명 이상</b>이 필요하면 직접 고용할 수 없고 반드시 <b>경비업 허가 업체에 도급</b>해야 합니다.</li>
+          <li>경비원은 시설주 관리권 범위 안에서만 활동하며, 폭력·강제력 행사는 허용되지 않습니다.</li></ul></div>
+      </div>
+      <div class="field" id="photoField">
         <label>현장 사진 <span class="muted" style="font-weight:500">(선택 · 최대 5장)</span></label>
         <label class="uploader" id="drop">
           <input type="file" id="files" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple>
@@ -39,9 +56,22 @@
 </main>
 <script type="module">
 import { renderHeader, requireLogin, $, $$, esc, options, qs, toast, resizeImage, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
-import { NATIONWIDE, IS_DEMO } from "/assets/js/config.js";
+import { NATIONWIDE, IS_DEMO, SPECIAL, FACILITY_TYPES, COLLECTIVE_SITES } from "/assets/js/config.js";
 await renderHeader();
 await requireLogin();
+$("#fac").innerHTML = options(FACILITY_TYPES, "", "선택");
+$("#col").innerHTML = Object.entries(COLLECTIVE_SITES).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+// 분야별 화면 전환: 특수경비 = 보안 모드 / 이주관리·행정대집행 = 집단민원현장 기본값 제안
+function syncCategoryMode() {
+  const c = $("#cat").value, special = c === SPECIAL;
+  $("#specialBox").hidden = !special; $("#fac").required = special;
+  $("#photoField").hidden = special;
+  if (special) { photos.forEach((p) => URL.revokeObjectURL(p.url)); photos = []; drawPreviews(); }
+  if (c === "행정대집행지원" && !$("#col").value) $("#col").value = "admin_execution";
+  if (c === "이주관리·범죄예방" && !$("#col").value) $("#col").value = "redevelopment";
+  $("#colNotice").hidden = !$("#col").value;
+}
+$("#col").onchange = syncCategoryMode;
 const regionOptions = (list, sel) => `<option value="">선택</option>` +
   (list.includes(NATIONWIDE) || list === REGIONS ? `<option value="${NATIONWIDE}" ${sel === NATIONWIDE ? "selected" : ""}>전국 (지역 무관 · 여러 지역)</option>` : "") +
   options((list.includes(NATIONWIDE) ? REGIONS : list).filter((r) => r !== NATIONWIDE), sel);
@@ -82,11 +112,14 @@ const drop = $("#drop");
 ["dragenter", "dragover"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("drag"); }));
 ["dragleave", "drop"].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("drag"); }));
 drop.addEventListener("drop", (e) => addFiles([...e.dataTransfer.files]));
+$("#cat").addEventListener("change", syncCategoryMode);
+syncCategoryMode();
 
 $("#form").onsubmit = async (e) => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
   delete f.files;
+  if (f.category !== SPECIAL) delete f.facility_type;
   f.budget = f.budget ? Number(f.budget) : null;
   f.target_vendor_id = vendor ? vendor.id : null;
   const btn = $("#submitBtn");

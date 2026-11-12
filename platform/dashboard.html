@@ -25,7 +25,7 @@
 </main>
 <script type="module">
 import { renderHeader, requireLogin, $, $$, esc, won, date, datetime, badge, qs, toast, renderPhotos, store } from "/assets/js/ui.js";
-import { REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS } from "/assets/js/config.js";
+import { REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES, SPECIAL } from "/assets/js/config.js";
 import { startPayment } from "/assets/js/pay.js";
 
 await renderHeader();
@@ -71,9 +71,17 @@ const requestInfo = (r) => `
     <dt>예산</dt><dd>${r.budget ? won(r.budget) : "협의"}</dd>
     <dt>요청자</dt><dd>${esc(r.customer_name)}</dd>
     <dt>등록일</dt><dd>${date(r.created_at)}</dd>
+    ${r.facility_type ? `<dt>시설 유형</dt><dd>🔒 ${esc(r.facility_type)}</dd>` : ""}
+    ${r.collective_site ? `<dt>현장 성격</dt><dd>${badge("집단민원현장", "warn")} ${esc(COLLECTIVE_SITES[r.collective_site] || r.collective_site)}</dd>` : ""}
   </dl>
   <p style="white-space:pre-wrap;background:var(--bg);padding:14px;border-radius:10px">${esc(r.details)}</p>
   <div class="req-photos" data-req="${r.id}"></div>`;
+// 업체용 법정 안내
+const vendorNotices = (r) =>
+  (r.category === SPECIAL ? `<div class="notice secure"><b>🔒 특수경비 요청 — 보안 유의</b>특수경비원 배치는 신고 대상이며, 시설 세부 정보는 선정 후 보안서약 절차를 거쳐 받으세요. 상담 메시지에 보안 정보를 남기지 마세요.</div>` : "") +
+  (r.collective_site ? `<div class="notice warn"><b>⚠ 집단민원현장 — 경비업법 의무</b><ul><li>경비원 배치 <b>48시간 전까지 관할 경찰관서 배치허가</b> 신청·허가 후 배치</li><li>현장에 <b>경비지도사 배치</b>, 일반경비원 명부를 배치장소에 비치</li><li>결격자·신임교육 미이수자 비율이 21% 이상이면 불허가</li></ul></div>` : "");
+// 청약 전 업체 신원정보 제공 (전자상거래법 제20조②)
+const vendorIdentity = (v) => v ? `<div class="vid"><span>상호 <b>${esc(v.company)}</b></span><span>대표 ${esc(v.ceo)}</span><span>사업자번호 ${esc(v.biz_no)}</span>${v.license_no ? `<span>경비업 허가 ${esc(v.license_no)}</span>` : ""}${v.sanitation_no ? `<span>위생관리업 ${esc(v.sanitation_no)}</span>` : ""}<span>연락처 ${esc(v.phone)}</span><span>주소 ${esc(v.address || "-")}</span></div>` : "";
 const fillPhotos = (r) => renderPhotos(document.querySelector(`.req-photos[data-req="${r.id}"]`), r);
 
 // ---------- CUSTOMER ----------
@@ -109,18 +117,20 @@ async function showCustomerRequest(id) {
   const threads = await store.listThreads(id);
   const sel = quotes.find((q) => q.status === "accepted");
   const target = r.target_vendor_id ? await store.getVendor(r.target_vendor_id) : null;
+  const vMap = Object.fromEntries(await Promise.all(quotes.map(async (q) => [q.vendor_id, await store.getVendor(q.vendor_id)])));
   $("#detail").innerHTML = `
     <div class="card">${requestInfo(r)}${target ? `<p class="mt">${badge("지정 업체", "navy")} ${esc(target.company)}</p>` : ""}
       ${r.status === "open" ? `<button class="p-btn p-btn-line p-btn-sm mt" id="cancelReq">요청 취소</button>` : ""}
-      ${r.status === "paid" ? `<div class="flex mt"><span class="muted">서비스가 완료되면 확인 버튼을 눌러주세요. 확인 후 업체에 정산됩니다.</span><button class="p-btn p-btn-sm" id="doneReq">서비스 완료 확인</button></div>` : ""}
+      ${r.status === "paid" ? `<div class="flex mt"><span class="muted">서비스가 완료되면 확인 버튼을 눌러주세요. 확인 후 PG를 통해 업체에 대금이 지급됩니다.</span><button class="p-btn p-btn-sm" id="doneReq">서비스 완료 확인</button></div>` : ""}
     </div>
     <div class="card">
       <h2>받은 견적 (${quotes.length})</h2>
       ${quotes.map((q) => `
         <div class="quote" ${q.status === "accepted" ? 'style="border-color:var(--teal)"' : ""}>
-          <div class="flex between"><b>${esc(q.vendor_company)}</b>${badge(QUOTE_STATUS[q.status], q.status === "accepted" ? "ok" : q.status === "rejected" ? "" : "teal")}</div>
+          <div class="flex between"><b>${esc(q.vendor_company)} ${vMap[q.vendor_id]?.is_operator ? `<span class="op-badge">운영사 직영</span>` : ""}</b>${badge(QUOTE_STATUS[q.status], q.status === "accepted" ? "ok" : q.status === "rejected" ? "" : "teal")}</div>
           <div class="amt">${won(q.amount)}</div>
           <p class="muted" style="white-space:pre-wrap;font-size:14px">${esc(q.message)}</p>
+          ${vendorIdentity(vMap[q.vendor_id])}
           <div class="flex mt">
             <a class="p-btn p-btn-line p-btn-sm" href="/platform/vendor?id=${q.vendor_id}" target="_blank">업체 정보</a>
             <button class="p-btn p-btn-line p-btn-sm" data-chat="${q.vendor_id}" data-name="${esc(q.vendor_company)}">상담하기</button>
@@ -208,6 +218,7 @@ async function showVendorRequest(id, myQuote) {
       </form>` : `<p class="muted mt">${myQuote?.status === "accepted" ? (r.status === "matched" ? "선정되었습니다. 고객 결제를 기다리고 있습니다." : r.status === "paid" ? "결제가 완료되었습니다. 서비스를 진행해 주세요." : "") : "견적 모집이 종료되었습니다."}</p>`}
     </div>
     <div class="card"><h2>고객 상담</h2><div id="chatBox"></div></div>`;
+  $("#detail .card").insertAdjacentHTML("beforeend", vendorNotices(r));
   fillPhotos(r);
   renderChat($("#chatBox"), r, vendor.id, r.customer_name + " 고객님");
   const f = $("#qForm");

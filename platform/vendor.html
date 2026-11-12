@@ -21,7 +21,7 @@ if (!v || v.status !== "approved") {
   <div class="split">
     <div>
       <div class="card">
-        <div class="flex between"><h1 style="color:var(--navy);font-size:28px">${esc(v.company)}</h1><span class="star" style="font-size:18px">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0}건)</small></span></div>
+        <div class="flex between"><h1 style="color:var(--navy);font-size:28px">${esc(v.company)} ${v.is_operator ? `<span class="op-badge">운영사 직영</span>` : ""}</h1><span class="star" style="font-size:18px">★ ${v.rating || "-"} <small class="muted">(${v.review_count || 0}건)</small></span></div>
         <div class="flex mt">${v.categories.map((c) => `<span class="badge teal">${esc(c)}</span>`).join("")}</div>
         <p class="mt" style="white-space:pre-wrap">${esc(v.intro)}</p>
       </div>
@@ -30,7 +30,10 @@ if (!v || v.status !== "approved") {
         <table class="tbl">
           <tr><th style="width:140px">대표자</th><td>${esc(v.ceo)}</td></tr>
           <tr><th>서비스 지역</th><td>${esc(regionLabel(v.regions))}</td></tr>
-          <tr><th>보유 허가</th><td>${esc(v.license_info || "-")}</td></tr>
+          <tr><th>경비업 허가</th><td>${(v.licenses || []).length ? (v.licenses.map((l) => `<span class="lic-tag">${esc(l)}</span>`).join("") + `<br><small class="muted">허가번호 ${esc(v.license_no || "-")}</small>`) : "-"}</td></tr>
+          ${v.sanitation_no ? `<tr><th>건물위생관리업</th><td>${esc(v.sanitation_no)}</td></tr>` : ""}
+          <tr><th>사업자등록번호</th><td>${esc(v.biz_no)}</td></tr>
+          <tr><th>기타 허가·자격</th><td>${esc(v.license_info || "-")}</td></tr>
           <tr><th>주소</th><td>${esc(v.address || "-")}</td></tr>
         </table>
         <p class="muted mt" style="font-size:13px">연락처는 견적 요청 후 상담 메시지를 통해 안내됩니다.</p>
