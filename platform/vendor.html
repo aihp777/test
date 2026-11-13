@@ -30,7 +30,7 @@ if (!v || v.status !== "approved") {
         <table class="tbl">
           <tr><th style="width:140px">대표자</th><td>${esc(v.ceo)}</td></tr>
           <tr><th>서비스 지역</th><td>${esc(regionLabel(v.regions))}</td></tr>
-          <tr><th>경비업 허가</th><td>${(v.licenses || []).length ? (v.licenses.map((l) => `<span class="lic-tag">${esc(l)}</span>`).join("") + `<br><small class="muted">허가번호 ${esc(v.license_no || "-")}</small>`) : "-"}</td></tr>
+          <tr><th>경비업 허가</th><td>${(v.licenses || []).length ? (v.licenses.map((l) => `<span class="lic-tag">${esc(l)}</span>`).join("") + `<br><small class="muted">허가번호 ${esc(v.license_no || "-")}${v.license_valid_until ? ` · 유효기간 ${esc(v.license_valid_until)}까지` : ""}</small>`) : "-"}</td></tr>
           ${v.sanitation_no ? `<tr><th>건물위생관리업</th><td>${esc(v.sanitation_no)}</td></tr>` : ""}
           <tr><th>사업자등록번호</th><td>${esc(v.biz_no)}</td></tr>
           <tr><th>기타 허가·자격</th><td>${esc(v.license_info || "-")}</td></tr>

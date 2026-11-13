@@ -23,11 +23,15 @@ export const COMPANY = {
   ceo: "김정환",
   address: "경기도 김포시 풍무2로 25, 2층 2-2호",
   tel: "031-945-2001",
-  fax: "031-3442-2001",
-  email: "",                    // 대표 이메일 (확인 후 입력)
+  fax: "0303-3442-2001",
+  email: "dbeh1@naver.com",     // 대표 이메일 (사업자등록증 기재)
   bizNo: "715-86-02889",        // 사업자등록번호 (2026-11-13 반영, 검증번호 확인 완료)
+  corpRegNo: "284911-0309946",  // 법인등록번호
+  openedAt: "2023-09-11",       // 개업일
   mailOrderNo: "",              // 통신판매업 신고번호 (신고 후 입력)
-  securityLicenseNo: "",        // 경비업 허가번호 (확인 후 입력)
+  securityLicenseNo: "경기도남부경찰청 제2442호", // 경비업 허가 (2025.10.13 발급)
+  securityLicenses: ["시설경비", "신변보호", "혼잡·교통유도경비"],
+  securityLicenseValidUntil: "2030-10-12",
   privacyOfficer: "김정환",     // 개인정보보호책임자
   hosting: "Vercel Inc. / Supabase Inc.",
 };
@@ -42,7 +46,11 @@ export function validBizNo(v) {
   s += Math.floor((+d[8] * 5) / 10);
   return (10 - (s % 10)) % 10 === +d[9];
 }
-export const fmtBizNo = (v) => { const d = String(v || "").replace(/\D/g, ""); return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v; };
+// 경비업 허가 유효기간 (경비업법상 허가 유효기간 5년) — 만료 업체는 매칭에서 제외
+export const licenseDaysLeft = (v) => (v && v.license_valid_until ? Math.ceil((new Date(v.license_valid_until + "T23:59:59") - Date.now()) / 86400e3) : null);
+export const licenseExpired = (v) => !!(v && (v.licenses || []).length && v.license_valid_until && licenseDaysLeft(v) < 0);
+export const LICENSE_WARN_DAYS = 90;
+export const fmtBizNo =(v) => { const d = String(v || "").replace(/\D/g, ""); return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v; };
 
 // -------------------------------------------------------------
 //  공동 관리자 (업무 동시 확인·알림)

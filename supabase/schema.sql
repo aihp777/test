@@ -621,6 +621,20 @@ alter table public.bids add column if not exists result_note text;
 alter table public.bids add column if not exists result_checked_at timestamptz;
 alter table public.bids add column if not exists result_source text;   -- nara | manual
 
+-- 경비업 허가 유효기간 (만료 업체는 매칭·견적 제외)
+alter table public.vendors add column if not exists license_valid_until date;
+create or replace function public.vendor_license_ok(p_vendor_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(array_length(licenses, 1), 0) = 0 or license_valid_until is null or license_valid_until >= current_date
+  from vendors where id = p_vendor_id;
+$$;
+create or replace function public.my_vendor_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select id from vendors
+  where owner_id = auth.uid() and status = 'approved'
+    and (coalesce(array_length(licenses, 1), 0) = 0 or license_valid_until is null or license_valid_until >= current_date);
+$$;
+
 -- ★ 문자 알림 연결: Supabase 대시보드 > Database > Webhooks > Create
 --   Table: admin_tasks / Events: INSERT / Type: HTTP Request / Method: POST
 --   URL: https://<사이트 도메인>/api/notify

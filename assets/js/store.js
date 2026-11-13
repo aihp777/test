@@ -1,7 +1,7 @@
 // =============================================================
 //  데이터 계층: 데모(localStorage) / 운영(Supabase) 공통 인터페이스
 // =============================================================
-import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES, OTP, validBizNo } from "./config.js";
+import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES, OTP, validBizNo, licenseExpired } from "./config.js";
 
 // 업체 보유 허가·신고 목록
 export const vendorLicenses = (v) => [...(v.licenses || []), ...(v.sanitation_no ? [SANITATION] : [])];
@@ -12,6 +12,8 @@ function validateVendor(data) {
   const bad = (data.categories || []).filter((c) => !allowed.includes(c));
   if (bad.length) throw new Error(`허가(신고)가 없는 분야는 선택할 수 없습니다: ${bad.join(", ")} → 필요: ${bad.map((c) => CATEGORY_REQUIRES[c].join("·")).join(" / ")}`);
   if ((data.licenses || []).length && !String(data.license_no || "").trim()) throw new Error("경비업 허가번호를 입력해 주세요.");
+  if ((data.licenses || []).length && !data.license_valid_until) throw new Error("경비업 허가 유효기간을 입력해 주세요. (허가증 6번 항목)");
+  if (licenseExpired(data)) throw new Error("경비업 허가 유효기간이 지났습니다. 갱신 허가증으로 다시 등록해 주세요.");
 }
 // 견적 요청 검증: 특수경비는 사진 첨부 금지·시설 유형 필수 (국가중요시설 보안)
 function validateRequest(data, photos) {
@@ -28,7 +30,7 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v8";
+const DB_KEY = "wg_platform_v9";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
@@ -44,11 +46,11 @@ function seed() {
     users: [admin, admin2, cust, v1u, v2u, v3u],
     vendors: [
       { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "715-86-02889", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
-        licenses: ["시설경비", "신변보호", "혼잡·교통유도경비"], license_no: "(데모) 허가번호 확인 후 입력", sanitation_no: "", docs: [], is_operator: true,
+        licenses: ["시설경비", "신변보호", "혼잡·교통유도경비"], license_no: "경기도남부경찰청 제2442호", license_valid_until: "2030-10-12", sanitation_no: "", docs: [], is_operator: true,
         categories: ["시설경비", "신변보호", "혼잡·교통유도", "이주관리·범죄예방", "행정대집행지원"], regions: [NATIONWIDE],
-        intro: "경찰청 허가법인. 재개발·재건축 이주관리, 대형 행사 경비, VIP 신변보호 다수 실적 보유.", license_info: "경비업 허가증, 분사기 허가증", status: "approved", rating: 4.9, review_count: 128, created_at: t(300) },
+        intro: "경기도남부경찰청 허가 경비법인(제2442호). 재개발·재건축 이주관리, 대형 행사 경비, VIP 신변보호 다수 실적 보유.", license_info: "분사기 소지허가", status: "approved", rating: 4.9, review_count: 128, created_at: t(300) },
       { id: "v-2", owner_id: "u-v2", company: "한빛시큐리티(데모)", ceo: "이대표", biz_no: "123-45-67891", phone: "02-000-0000", email: "vendor2@demo.com", address: "서울특별시",
-        licenses: ["시설경비", "혼잡·교통유도경비"], license_no: "서울청 제0000호(데모)", sanitation_no: "", docs: [],
+        licenses: ["시설경비", "혼잡·교통유도경비"], license_no: "서울청 제0000호(데모)", license_valid_until: new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10), sanitation_no: "", docs: [],
         categories: ["시설경비", "혼잡·교통유도"], regions: ["서울", "경기"], intro: "공연·행사 전문 경비업체 (데모 데이터)", license_info: "경비업 허가증", status: "approved", rating: 4.6, review_count: 41, created_at: t(120) },
       { id: "v-3", owner_id: "u-v3", company: "그린클린(데모)", ceo: "박대표", biz_no: "234-56-78904", phone: "032-000-0000", email: "vendor3@demo.com", address: "인천광역시",
         licenses: [], license_no: "", sanitation_no: "인천 제2026-000호(데모)", docs: [],
@@ -175,7 +177,7 @@ const demo = {
   // --- vendors
   async listVendors({ category, region, status = "approved", q } = {}) {
     return load().vendors.filter((v) =>
-      (!status || v.status === status) &&
+      (!status || v.status === status) && (status !== "approved" || !licenseExpired(v)) &&
       (!category || v.categories.includes(category)) &&
       covers(v.regions, region) &&
       (!q || (v.company + v.intro).includes(q))
@@ -271,7 +273,7 @@ const demo = {
   },
   async listMyRequests() { const me = await this.currentUser(); return load().requests.filter((r) => r.customer_id === me.id).sort(byNewest); },
   async listMatchedRequests() {
-    const v = await this.myVendor(); if (!v || v.status !== "approved") return [];
+    const v = await this.myVendor(); if (!v || v.status !== "approved" || licenseExpired(v)) return [];
     const d = load();
     const quoted = new Set(d.quotes.filter((q) => q.vendor_id === v.id).map((q) => q.request_id));
     return d.requests.filter((r) =>
@@ -450,6 +452,7 @@ const supa = {
   async listVendors({ category, region, status = "approved", q } = {}) {
     const c = await client(); let s = c.from("vendors").select("*");
     if (status) s = s.eq("status", status);
+    if (status === "approved") s = s.or(`license_valid_until.is.null,license_valid_until.gte.${new Date().toISOString().slice(0, 10)}`); // 허가 만료 업체 제외
     if (category) s = s.contains("categories", [category]);
     if (region && region !== NATIONWIDE) s = s.overlaps("regions", [region, NATIONWIDE]);
     if (q) s = s.or(`company.ilike.%${q}%,intro.ilike.%${q}%`);
@@ -508,7 +511,7 @@ const supa = {
   async getRequest(id) { const c = await client(); return ok(await c.from("requests").select("*").eq("id", id).maybeSingle()); },
   async listMyRequests() { const c = await client(); const me = await this.currentUser(); return ok(await c.from("requests").select("*").eq("customer_id", me.id).order("created_at", { ascending: false })); },
   async listMatchedRequests() {
-    const c = await client(); const v = await this.myVendor(); if (!v || v.status !== "approved") return [];
+    const c = await client(); const v = await this.myVendor(); if (!v || v.status !== "approved" || licenseExpired(v)) return [];
     let oq = c.from("requests").select("*").eq("status", "open").is("target_vendor_id", null).in("category", v.categories);
     if (!v.regions.includes(NATIONWIDE)) oq = oq.in("region", [...v.regions, NATIONWIDE]);
     const open = ok(await oq);

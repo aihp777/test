@@ -2,7 +2,9 @@
 //  관리자 콘솔 (/admin)
 // =============================================================
 import { $, $$, esc, won, date, datetime, badge, toast, renderPhotos, store, CATEGORIES, REGIONS, regionLabel } from "./ui.js";
-import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES, ADMIN_TEAM, TASK_TYPES, TASK_STATUS, BID, BID_STATUS, validBizNo } from "./config.js";
+import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES, ADMIN_TEAM, TASK_TYPES, TASK_STATUS, BID, BID_STATUS, validBizNo, licenseDaysLeft, licenseExpired, LICENSE_WARN_DAYS } from "./config.js";
+// 경비업 허가 유효기간 배지 (만료 = 매칭 중단, 90일 이내 = 갱신 안내)
+const licBadge = (v) => { const d = licenseDaysLeft(v); if (d === null || !(v.licenses || []).length) return ""; return d < 0 ? badge("허가 만료", "bad") : d <= LICENSE_WARN_DAYS ? badge(`허가 만료 D-${d}`, "warn") : ""; };
 
 // ---------- 인증 ----------
 const me = await store.currentUser();
@@ -137,6 +139,7 @@ async function dashboard() {
         <div class="todo">
           <a href="#tasks">🔔 공동 업무함 미처리 <b>${(await store.listTasks()).filter((t) => t.status !== "done").length}</b></a>
           <a href="#bids?status=new">📢 나라장터 신규 공고 <b>${(await store.listBids()).filter((b) => b.status === "new").length}</b></a>
+          <a href="#vendors?status=approved">⏳ 허가 만료 ${LICENSE_WARN_DAYS}일 이내 업체 <b>${vendors.filter((v) => (v.licenses || []).length && licenseDaysLeft(v) !== null && licenseDaysLeft(v) <= LICENSE_WARN_DAYS).length}</b></a>
           <a href="#vendors?status=pending">승인 대기 업체 <b>${vendors.filter((v) => v.status === "pending").length}</b></a>
           <a href="#requests?filter=noquote">견적 0건인 요청 <b>${noQuote.length}</b></a>
           <a href="#payments?settle=ready">정산 가능 (서비스 완료) <b>${settleReady.length}</b></a>
@@ -222,7 +225,7 @@ async function vendorsView(params) {
     $("#tb").innerHTML = rows.map((v) => { const s = stat(v); return `<tr class="click" data-id="${v.id}">
       <td><b>${esc(v.company)}</b><div class="sm">${esc(v.phone)}</div></td><td>${esc(v.ceo)}</td><td class="sm">${esc(v.biz_no)}</td>
       <td class="sm" style="max-width:180px">${esc(v.categories.join(", "))}</td><td class="sm">${esc(regionLabel(v.regions))}</td>
-      <td class="num">${s.q}</td><td class="num">${s.a}</td><td class="num">${won(s.amt)}</td><td>${vBadge(v.status)}</td><td class="sm">${date(v.created_at)}</td></tr>`; }).join("")
+      <td class="num">${s.q}</td><td class="num">${s.a}</td><td class="num">${won(s.amt)}</td><td>${vBadge(v.status)} ${licBadge(v)}</td><td class="sm">${date(v.created_at)}</td></tr>`; }).join("")
       || `<tr><td colspan="10" class="empty">업체가 없습니다.</td></tr>`;
     $$("#tb tr.click").forEach((tr) => (tr.onclick = () => vendorDrawer(vendors.find((v) => v.id === tr.dataset.id), stat)));
   };
@@ -236,7 +239,7 @@ function vendorDrawer(v, stat) {
     <p>${vBadge(v.status)}</p>
     <dl class="kv mt"><dt>대표자</dt><dd>${esc(v.ceo)}</dd><dt>사업자번호</dt><dd>${esc(v.biz_no)}</dd><dt>연락처</dt><dd>${esc(v.phone)}</dd><dt>이메일</dt><dd>${esc(v.email)}</dd>
       <dt>주소</dt><dd>${esc(v.address || "-")}</dd>
-      <dt>경비업 허가</dt><dd>${(v.licenses || []).map((l) => badge(l, "navy")).join(" ") || "-"}<br><small class="muted">허가번호 ${esc(v.license_no || "-")}</small></dd>
+      <dt>경비업 허가</dt><dd>${(v.licenses || []).map((l) => badge(l, "navy")).join(" ") || "-"}<br><small class="muted">허가번호 ${esc(v.license_no || "-")} · 유효기간 ${esc(v.license_valid_until || "-")}</small> ${licBadge(v)}</dd>
       <dt>건물위생관리업</dt><dd>${esc(v.sanitation_no || "-")}</dd>
       ${(v.licenses || []).includes("특수경비") ? `<dt>경비대행업자</dt><dd>${esc(v.special_agent || "미입력")}</dd>` : ""}
       <dt>기타 허가</dt><dd>${esc(v.license_info || "-")}</dd><dt>서비스 분야</dt><dd>${esc(v.categories.join(", "))}</dd><dt>서비스 지역</dt><dd>${esc(regionLabel(v.regions))}</dd>

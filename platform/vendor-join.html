@@ -33,7 +33,8 @@
       <div class="field"><label>경비업 허가 업무 <span class="muted" style="font-weight:500">(허가증에 기재된 업무 모두 선택)</span></label>
         <div class="chips" id="lics"></div></div>
       <div class="row2">
-        <div class="field"><label>경비업 허가번호</label><input name="license_no" placeholder="예) 경기남부청 제0000호"><small>경비업 허가가 있으면 필수</small></div>
+        <div class="field"><label>경비업 허가번호</label><input name="license_no" placeholder="예) 경기도남부경찰청 제0000호"><small>경비업 허가가 있으면 필수</small></div>
+        <div class="field"><label>허가 유효기간</label><input type="date" name="license_valid_until"><small>허가증 6번 항목 (경비업 허가가 있으면 필수, 만료 시 매칭 중단)</small></div>
         <div class="field"><label>건물위생관리업 신고번호</label><input name="sanitation_no" placeholder="청소대행 업체만 (공중위생관리법)"><small>입력 시 '청소대행' 분야 선택 가능</small></div>
       </div>
       <div class="field" id="specialBox" hidden>
@@ -123,7 +124,7 @@ $("#docs").onchange = (e) => {
 };
 
 // --- 기존 정보 불러오기
-const FIELDS = ["company", "ceo", "biz_no", "phone", "email", "address", "license_no", "sanitation_no", "special_agent", "license_info", "intro"];
+const FIELDS = ["company", "ceo", "biz_no", "phone", "email", "address", "license_no", "license_valid_until", "sanitation_no", "special_agent", "license_info", "intro"];
 const mine = await store.myVendor();
 if (mine) {
   const tone = { approved: "ok", pending: "warn", rejected: "bad" }[mine.status];
