@@ -1,12 +1,13 @@
 // =============================================================
 //  데이터 계층: 데모(localStorage) / 운영(Supabase) 공통 인터페이스
 // =============================================================
-import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES, OTP } from "./config.js";
+import { CONFIG, IS_DEMO, NATIONWIDE, covers, allowedCategories, SANITATION, SPECIAL, CATEGORY_REQUIRES, OTP, validBizNo } from "./config.js";
 
 // 업체 보유 허가·신고 목록
 export const vendorLicenses = (v) => [...(v.licenses || []), ...(v.sanitation_no ? [SANITATION] : [])];
 // 업체 등록 검증: 허가 없는 분야 선택 금지 (경비업법 제7조의2 무허가 도급 방지)
 function validateVendor(data) {
+  if (!validBizNo(data.biz_no)) throw new Error("사업자등록번호가 올바르지 않습니다. (검증번호 불일치) 번호를 다시 확인해 주세요.");
   const allowed = allowedCategories(vendorLicenses(data));
   const bad = (data.categories || []).filter((c) => !allowed.includes(c));
   if (bad.length) throw new Error(`허가(신고)가 없는 분야는 선택할 수 없습니다: ${bad.join(", ")} → 필요: ${bad.map((c) => CATEGORY_REQUIRES[c].join("·")).join(" / ")}`);
@@ -27,7 +28,7 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v7";
+const DB_KEY = "wg_platform_v8";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
@@ -42,14 +43,14 @@ function seed() {
   return {
     users: [admin, admin2, cust, v1u, v2u, v3u],
     vendors: [
-      { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "000-00-00000", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
+      { id: "v-1", owner_id: "u-v1", company: "(주)와이드가드", ceo: "김정환", biz_no: "715-86-02889", phone: "031-945-2001", email: "vendor@demo.com", address: "경기도 김포시 풍무2로 25, 2층 2-2호",
         licenses: ["시설경비", "신변보호", "혼잡·교통유도경비"], license_no: "(데모) 허가번호 확인 후 입력", sanitation_no: "", docs: [], is_operator: true,
         categories: ["시설경비", "신변보호", "혼잡·교통유도", "이주관리·범죄예방", "행정대집행지원"], regions: [NATIONWIDE],
         intro: "경찰청 허가법인. 재개발·재건축 이주관리, 대형 행사 경비, VIP 신변보호 다수 실적 보유.", license_info: "경비업 허가증, 분사기 허가증", status: "approved", rating: 4.9, review_count: 128, created_at: t(300) },
-      { id: "v-2", owner_id: "u-v2", company: "한빛시큐리티(데모)", ceo: "이대표", biz_no: "000-00-00001", phone: "02-000-0000", email: "vendor2@demo.com", address: "서울특별시",
+      { id: "v-2", owner_id: "u-v2", company: "한빛시큐리티(데모)", ceo: "이대표", biz_no: "123-45-67891", phone: "02-000-0000", email: "vendor2@demo.com", address: "서울특별시",
         licenses: ["시설경비", "혼잡·교통유도경비"], license_no: "서울청 제0000호(데모)", sanitation_no: "", docs: [],
         categories: ["시설경비", "혼잡·교통유도"], regions: ["서울", "경기"], intro: "공연·행사 전문 경비업체 (데모 데이터)", license_info: "경비업 허가증", status: "approved", rating: 4.6, review_count: 41, created_at: t(120) },
-      { id: "v-3", owner_id: "u-v3", company: "그린클린(데모)", ceo: "박대표", biz_no: "000-00-00002", phone: "032-000-0000", email: "vendor3@demo.com", address: "인천광역시",
+      { id: "v-3", owner_id: "u-v3", company: "그린클린(데모)", ceo: "박대표", biz_no: "234-56-78904", phone: "032-000-0000", email: "vendor3@demo.com", address: "인천광역시",
         licenses: [], license_no: "", sanitation_no: "인천 제2026-000호(데모)", docs: [],
         categories: ["청소대행"], regions: ["인천", "경기"], intro: "빌딩·사무실 정밀 청소 (데모 데이터)", license_info: "건물위생관리업 신고", status: "pending", rating: 0, review_count: 0, created_at: t(1) },
     ],
@@ -384,6 +385,9 @@ const demo = {
     const me = await this.currentUser(); const d = load(); const b = d.bids.find((x) => x.id === id);
     Object.assign(b, patch, { updated_by: me.name, updated_at: now() }); save(d); return b;
   },
+  async checkBizStatus(b_no) {
+    return { b_no, status: validBizNo(b_no) ? "데모: 검증번호 유효 (국세청 실시간 조회는 운영 환경에서)" : "검증번호 불일치 — 잘못된 번호", tax_type: "", checked_at: now(), demo: true };
+  },
   async syncBids() { return { added: 0, message: "데모 모드: 실제 수집은 운영 환경(Vercel 서버 함수 + 공공데이터포털 인증키)에서 실행됩니다." }; },
   // 개찰 결과 반영: 투찰 완료 + 개찰일 경과 + 결과 미반영 공고 (데모는 예시 결과로 채움)
   async syncBidResults() {
@@ -597,6 +601,7 @@ const supa = {
   async listBids() { const c = await client(); return ok(await c.from("bids").select("*").order("close_at", { ascending: true }).limit(300)); },
   async updateBid(id, patch) { const c = await client(); const me = await this.currentUser(); return ok(await c.from("bids").update({ ...patch, updated_by: me.name, updated_at: now() }).eq("id", id).select().single()); },
   async syncBids() { return api("/api/bids-sync", {}, true); },
+  async checkBizStatus(b_no) { return api("/api/biz-status", { b_no }, true); },
   async syncBidResults() { return api("/api/bids-results", {}, true); },
 };
 

@@ -25,13 +25,24 @@ export const COMPANY = {
   tel: "031-945-2001",
   fax: "031-3442-2001",
   email: "",                    // 대표 이메일 (확인 후 입력)
-  bizNo: "",                    // 사업자등록번호 (확인 후 입력)
+  bizNo: "715-86-02889",        // 사업자등록번호 (2026-11-13 반영, 검증번호 확인 완료)
   mailOrderNo: "",              // 통신판매업 신고번호 (신고 후 입력)
   securityLicenseNo: "",        // 경비업 허가번호 (확인 후 입력)
   privacyOfficer: "김정환",     // 개인정보보호책임자
   hosting: "Vercel Inc. / Supabase Inc.",
 };
 export const pending = (v, label = "확인 후 입력") => v || `(${label})`;
+
+// 사업자등록번호 검증번호(체크섬) 확인 — 국세청 공개 산식
+export function validBizNo(v) {
+  const d = String(v || "").replace(/\D/g, "");
+  if (d.length !== 10) return false;
+  const w = [1, 3, 7, 1, 3, 7, 1, 3, 5];
+  let s = w.reduce((acc, x, i) => acc + x * +d[i], 0);
+  s += Math.floor((+d[8] * 5) / 10);
+  return (10 - (s % 10)) % 10 === +d[9];
+}
+export const fmtBizNo = (v) => { const d = String(v || "").replace(/\D/g, ""); return d.length === 10 ? `${d.slice(0, 3)}-${d.slice(3, 5)}-${d.slice(5)}` : v; };
 
 // -------------------------------------------------------------
 //  공동 관리자 (업무 동시 확인·알림)

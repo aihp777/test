@@ -19,7 +19,7 @@
         <div class="field"><label>대표자명<em>*</em></label><input name="ceo" required></div>
       </div>
       <div class="row2">
-        <div class="field"><label>사업자등록번호<em>*</em></label><input name="biz_no" required pattern="\d{3}-?\d{2}-?\d{5}" placeholder="000-00-00000"></div>
+        <div class="field"><label>사업자등록번호<em>*</em></label><input name="biz_no" required pattern="\d{3}-?\d{2}-?\d{5}" placeholder="000-00-00000" inputmode="numeric"><small id="bizHint"></small></div>
         <div class="field"><label>대표 연락처<em>*</em></label><input name="phone" required></div>
       </div>
       <div class="row2">
@@ -67,7 +67,7 @@
 </main>
 <script type="module">
 import { renderHeader, requireLogin, $, $$, esc, badge, toast, store, CATEGORIES, REGIONS } from "/assets/js/ui.js";
-import { VENDOR_STATUS, REGION_GROUPS, NATIONWIDE, LICENSES, SANITATION, CATEGORY_REQUIRES, allowedCategories, IS_DEMO } from "/assets/js/config.js";
+import { VENDOR_STATUS, REGION_GROUPS, NATIONWIDE, LICENSES, SANITATION, CATEGORY_REQUIRES, allowedCategories, IS_DEMO, validBizNo, fmtBizNo } from "/assets/js/config.js";
 import { vendorLicenses } from "/assets/js/store.js";
 await renderHeader();
 await requireLogin();
@@ -76,6 +76,13 @@ $("#lics").innerHTML = LICENSES.map((l) => chip("licenses", l)).join("");
 $("#cats").innerHTML = CATEGORIES.map((c) => `<label title="필요: ${esc(CATEGORY_REQUIRES[c].join("·"))}"><input type="checkbox" name="categories" value="${esc(c)}"><span>${esc(c)}</span></label>`).join("");
 $("#regs").innerHTML = REGIONS.map((r) => chip("regions", r)).join("");
 $("#groups").innerHTML = Object.keys(REGION_GROUPS).map((g) => `<button type="button" class="p-btn p-btn-line p-btn-sm" data-g="${g}">+ ${g}</button>`).join("");
+
+// --- 사업자등록번호 실시간 확인 (검증번호)
+$("[name=biz_no]").addEventListener("input", (e) => {
+  const d = e.target.value.replace(/\D/g, "");
+  $("#bizHint").textContent = d.length < 10 ? "" : validBizNo(d) ? "✔ 유효한 사업자등록번호 형식입니다" : "✖ 번호가 올바르지 않습니다 (검증번호 불일치)";
+  $("#bizHint").style.color = d.length === 10 && validBizNo(d) ? "var(--ok)" : "var(--bad)";
+});
 
 // --- 허가 → 선택 가능 분야 동기화
 const currentLicenses = () => [...$$("input[name=licenses]:checked").map((i) => i.value), ...($("[name=sanitation_no]").value.trim() ? [SANITATION] : [])];
@@ -138,6 +145,8 @@ $("#form").onsubmit = async (e) => {
   const fd = new FormData(e.target);
   const data = Object.fromEntries(FIELDS.map((k) => [k, (fd.get(k) || "").trim()]));
   data.licenses = fd.getAll("licenses");
+  if (!validBizNo(data.biz_no)) { $("[name=biz_no]").focus(); return toast("사업자등록번호가 올바르지 않습니다. 다시 확인해 주세요.", "bad"); }
+  data.biz_no = fmtBizNo(data.biz_no);
   data.categories = fd.getAll("categories");
   data.regions = $("#nation").checked ? [NATIONWIDE] : fd.getAll("regions").filter((r) => r !== NATIONWIDE);
   if (!data.categories.length || !data.regions.length) return toast("서비스 분야와 지역을 1개 이상 선택하세요.", "bad");

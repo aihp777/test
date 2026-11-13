@@ -7,7 +7,7 @@
 //
 // 환경변수
 //   NARA_SERVICE_KEY   공공데이터포털 인증키(Decoding) — 낙찰정보서비스도 활용신청 필요
-//   COMPANY_BIZ_NO     (주)와이드가드 사업자등록번호 (숫자만 또는 하이픈 포함)
+//   COMPANY_BIZ_NO     (선택) 사업자등록번호 — 기본값 715-86-02889 ((주)와이드가드)
 //   NARA_RESULT_BASE   기본값 https://apis.data.go.kr/1230000/as/ScsbidInfoService
 //   NARA_RESULT_OP     기본값 getOpengResultListInfoOpengCompt  ← 활용신청 후 명세서의 영문명과 다르면 이 값만 변경
 //   CRON_SECRET        Vercel Cron 인증용
@@ -42,8 +42,8 @@ module.exports = L.handler(async (req, res) => {
     if (!L.env("CRON_SECRET") || req.headers.authorization !== `Bearer ${L.env("CRON_SECRET")}`) throw L.httpError(401, "unauthorized");
   } else if (req.method === "POST") await L.requireAdmin(req);
   else throw L.httpError(405, "Method Not Allowed");
-  L.need("NARA_SERVICE_KEY", "COMPANY_BIZ_NO");
-  const myBiz = digits(L.env("COMPANY_BIZ_NO"));
+  L.need("NARA_SERVICE_KEY");
+  const myBiz = digits(L.env("COMPANY_BIZ_NO") || "715-86-02889"); // (주)와이드가드 사업자등록번호 (공개 정보)
 
   const nowIso = new Date().toISOString();
   const targets = await L.rest(`/bids?status=eq.submitted&open_at=lt.${nowIso}&result_checked_at=is.null&select=*&limit=50`);

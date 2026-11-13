@@ -2,7 +2,7 @@
 //  관리자 콘솔 (/admin)
 // =============================================================
 import { $, $$, esc, won, date, datetime, badge, toast, renderPhotos, store, CATEGORIES, REGIONS, regionLabel } from "./ui.js";
-import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES, ADMIN_TEAM, TASK_TYPES, TASK_STATUS, BID, BID_STATUS } from "./config.js";
+import { IS_DEMO, CONFIG, REQUEST_STATUS, QUOTE_STATUS, VENDOR_STATUS, COLLECTIVE_SITES, ADMIN_TEAM, TASK_TYPES, TASK_STATUS, BID, BID_STATUS, validBizNo } from "./config.js";
 
 // ---------- 인증 ----------
 const me = await store.currentUser();
@@ -242,6 +242,10 @@ function vendorDrawer(v, stat) {
       <dt>기타 허가</dt><dd>${esc(v.license_info || "-")}</dd><dt>서비스 분야</dt><dd>${esc(v.categories.join(", "))}</dd><dt>서비스 지역</dt><dd>${esc(regionLabel(v.regions))}</dd>
       <dt>평점</dt><dd>★ ${v.rating || "-"} (${v.review_count || 0})</dd><dt>실적</dt><dd>견적 ${s.q}건 · 선정 ${s.a}건 · 거래액 ${won(s.amt)}</dd><dt>등록일</dt><dd>${date(v.created_at)}</dd></dl>
     <h4>업체 소개</h4><p style="white-space:pre-wrap;font-size:14px">${esc(v.intro)}</p>
+    <h4>사업자 상태 (국세청)</h4>
+    <div class="flex"><span>${esc(v.biz_no)} ${validBizNo(v.biz_no) ? badge("검증번호 유효", "ok") : badge("검증번호 불일치", "bad")}</span>
+      <button class="p-btn p-btn-line p-btn-sm" id="ntsBtn" type="button">국세청 상태조회</button></div>
+    <p id="ntsRes" class="muted" style="font-size:13px;margin-top:6px"></p>
     <h4>제출 서류</h4><div class="doc-list" id="vDocs"><span class="muted">불러오는 중...</span></div>
     <h4>심사 체크리스트</h4>
     <ul style="font-size:13.5px;margin-left:18px;line-height:1.9">
@@ -262,6 +266,17 @@ function vendorDrawer(v, stat) {
      ${v.status === "approved" ? `<button class="p-btn p-btn-bad" data-s="rejected">활동 정지</button>` : ""}
      <a class="p-btn p-btn-line" href="/platform/vendor?id=${v.id}" target="_blank">공개 페이지</a>`);
   $("#saveMemo").onclick = async () => { await store.updateVendorAdmin(v.id, { admin_memo: $("#memo").value }); toast("메모를 저장했습니다."); };
+  $("#ntsBtn").onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      const r = await store.checkBizStatus(v.biz_no);
+      const ok = /계속사업자/.test(r.status), bad = /휴업|폐업|불일치|등록되지/.test(r.status + r.tax_type);
+      $("#ntsRes").innerHTML = `${badge(r.status, ok ? "ok" : bad ? "bad" : "warn")} ${esc(r.tax_type || "")} ${r.end_date ? `· 폐업일 ${esc(r.end_date)}` : ""} <span class="muted">(${datetime(r.checked_at)})</span>`;
+      await store.updateVendorAdmin(v.id, { admin_memo: `${$("#memo").value}\n[국세청 ${new Date().toLocaleDateString("ko-KR")}] ${r.status} ${r.tax_type || ""}`.trim() });
+      $("#memo").value = `${$("#memo").value}\n[국세청 ${new Date().toLocaleDateString("ko-KR")}] ${r.status} ${r.tax_type || ""}`.trim();
+    } catch (err) { $("#ntsRes").textContent = err.message; }
+    e.target.disabled = false;
+  };
   $("#isOp").onchange = async (e) => { await store.updateVendorAdmin(v.id, { is_operator: e.target.checked }); toast(e.target.checked ? "운영사 직영으로 표시합니다." : "직영 표시를 해제했습니다."); };
   store.getDocUrls(v).then((docs) => {
     $("#vDocs").innerHTML = docs.map((d) => `<a href="${esc(d.url)}" target="_blank" rel="noopener" download="${esc(d.name)}">📄 ${esc(d.name)}</a>`).join("") || `<span class="muted">제출된 서류가 없습니다.</span>`;
