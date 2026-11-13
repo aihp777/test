@@ -609,6 +609,18 @@ end $$;
 drop trigger if exists trg_task_bid on public.bids;
 create trigger trg_task_bid after insert on public.bids for each row execute function public.task_on_bid();
 
+-- 나라장터 2단계: 개찰 결과
+alter table public.bids add column if not exists participants int;
+alter table public.bids add column if not exists our_rank int;
+alter table public.bids add column if not exists our_rate numeric(7,3);
+alter table public.bids add column if not exists winner_name text;
+alter table public.bids add column if not exists winner_bizno text;
+alter table public.bids add column if not exists winner_amount bigint;
+alter table public.bids add column if not exists winner_rate numeric(7,3);
+alter table public.bids add column if not exists result_note text;
+alter table public.bids add column if not exists result_checked_at timestamptz;
+alter table public.bids add column if not exists result_source text;   -- nara | manual
+
 -- ★ 문자 알림 연결: Supabase 대시보드 > Database > Webhooks > Create
 --   Table: admin_tasks / Events: INSERT / Type: HTTP Request / Method: POST
 --   URL: https://<사이트 도메인>/api/notify

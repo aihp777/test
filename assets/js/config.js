@@ -50,6 +50,7 @@ export const TASK_TYPES = {
   settle: { label: "정산 대기", icon: "🏦" },
   refund: { label: "환불 처리", icon: "↩️" },
   bid: { label: "나라장터 신규 공고", icon: "📢" },
+  bid_result: { label: "나라장터 개찰 결과", icon: "🏁" },
 };
 export const TASK_STATUS = { new: "신규", in_progress: "처리중", done: "완료" };
 

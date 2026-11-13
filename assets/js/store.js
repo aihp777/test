@@ -27,7 +27,7 @@ const makeOrderId = () => "WG" + Date.now() + Math.random().toString(36).slice(2
 // -------------------------------------------------------------
 //  DEMO STORE
 // -------------------------------------------------------------
-const DB_KEY = "wg_platform_v6";
+const DB_KEY = "wg_platform_v7";
 const SESSION_KEY = "wg_session_v1";
 
 function seed() {
@@ -79,6 +79,32 @@ function addTask(d, type, ref_id, title, detail = "") {
   d.tasks = d.tasks || [];
   d.tasks.push({ id: uid(), type, ref_id, title, detail, status: "new", assignee: null, read_by: [], events: [{ at: now(), by: "시스템", action: "접수 · 관리자 2인 알림 (데모: 문자 미발송)" }], created_at: now() });
 }
+// 데모용 과거 입찰 이력 (통계 화면 확인용, 실제 공고·결과 아님)
+function seedBidHistory(d) {
+  const t = (days) => new Date(Date.now() - days * 86400000).toISOString();
+  const H = [
+    // [며칠 전 개찰, 제목, 기관, 키워드, 기초금액, 우리 투찰률%, 결과(won/lost), 낙찰 투찰률%, 참가업체, 우리 순위]
+    [160, "청사 시설경비 용역", "○○구청", "경비", 210000000, 88.12, "lost", 87.96, 34, 5],
+    [140, "체육관 행사 안전요원 용역", "○○시체육회", "안전요원", 38000000, 88.40, "won", 88.40, 19, 1],
+    [118, "도서관 야간 경비 용역", "○○교육청", "경비", 96000000, 87.90, "lost", 87.82, 41, 3],
+    [96, "축제 교통정리·질서유지 용역", "○○문화재단", "교통정리", 61000000, 88.05, "won", 88.05, 22, 1],
+    [75, "공영주차장 관리 용역", "○○도시공사", "주차관리", 145000000, 88.30, "lost", 87.88, 28, 9],
+    [52, "복지관 시설경비 용역", "○○복지재단", "경비", 72000000, 87.95, "won", 87.95, 26, 1],
+    [30, "청사 보안요원 용역", "○○공단", "보안요원", 188000000, 88.20, "lost", 87.91, 37, 6],
+    [12, "공원 질서유지 용역", "○○시", "질서유지", 44000000, 88.01, "won", 88.01, 17, 1],
+  ];
+  H.forEach(([ago, title, org, kw, base, ourRate, res, winRate, n, rank], i) => {
+    const est = Math.round(base * 0.995);
+    d.bids.push({ id: "bh-" + i, bid_no: "R26BKH" + String(i).padStart(5, "0"), bid_ord: "000", title: "(데모) " + title, org: "(데모) " + org, demand_org: "(데모) " + org,
+      region_limit: "경기도", close_at: t(ago + 1), open_at: t(ago), base_amount: base, presumed_price: Math.round(base / 1.1), url: "https://www.g2b.go.kr", keyword: kw,
+      status: res, assignee: i % 2 ? "김종연" : "김정환", memo: "", my_amount: Math.round(est * ourRate / 100), created_at: t(ago + 10),
+      participants: n, our_rank: rank, our_rate: ourRate, winner_name: res === "won" ? "(주)와이드가드" : `(데모) 경쟁업체${i + 1}`, winner_amount: Math.round(est * winRate / 100), winner_rate: winRate,
+      result_checked_at: t(ago - 0.2), result_source: "demo" });
+  });
+  // 투찰 완료 후 개찰일이 지났지만 결과 미반영 상태 → '결과 확인' 버튼으로 반영 체험
+  d.bids.push({ id: "bh-p", bid_no: "R26BKH00099", bid_ord: "000", title: "(데모) 경로당 순찰·경비 용역", org: "(데모) ○○군청", demand_org: "(데모) ○○군청", region_limit: "", close_at: t(2), open_at: t(1), base_amount: 58000000, presumed_price: 52727272, url: "https://www.g2b.go.kr", keyword: "경비", status: "submitted", assignee: "김정환", memo: "투찰 완료", my_amount: 50800000, created_at: t(9) });
+  return d;
+}
 function seedTasks(d) {
   addTask(d, "request", "r-1", "가평 야외 축제 교통유도 인력 20명", "김고객 · 혼잡·교통유도 · 경기");
   addTask(d, "vendor_review", "v-3", "그린클린(데모) 업체 등록 심사", "청소대행 · 건물위생관리업 신고증 확인 필요");
@@ -111,7 +137,7 @@ function seedHistory(db) {
 
 const load = () => {
   try { const d = JSON.parse(localStorage.getItem(DB_KEY)); if (d) return d; } catch (e) {}
-  const d = seedTasks(seedHistory(seed())); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
+  const d = seedTasks(seedBidHistory(seedHistory(seed()))); localStorage.setItem(DB_KEY, JSON.stringify(d)); return d;
 };
 const save = (d) => {
   try { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
@@ -359,6 +385,22 @@ const demo = {
     Object.assign(b, patch, { updated_by: me.name, updated_at: now() }); save(d); return b;
   },
   async syncBids() { return { added: 0, message: "데모 모드: 실제 수집은 운영 환경(Vercel 서버 함수 + 공공데이터포털 인증키)에서 실행됩니다." }; },
+  // 개찰 결과 반영: 투찰 완료 + 개찰일 경과 + 결과 미반영 공고 (데모는 예시 결과로 채움)
+  async syncBidResults() {
+    const d = load(); let updated = 0;
+    d.bids.filter((b) => b.status === "submitted" && b.open_at && new Date(b.open_at) < new Date() && !b.result_checked_at).forEach((b) => {
+      const est = Math.round((b.base_amount || 0) * 0.998);
+      const ourRate = b.my_amount && est ? +(b.my_amount / est * 100).toFixed(3) : null;
+      // 낙찰하한율 이상 최저가가 1순위 → 우리보다 조금 낮게 투찰한 업체가 1순위인 예시
+      const winRate = ourRate ? +(ourRate - 0.06).toFixed(3) : 87.7;
+      Object.assign(b, { participants: 24, our_rank: 2, our_rate: ourRate, winner_name: "(데모) 경쟁업체A", winner_amount: Math.round(est * winRate / 100), winner_rate: winRate,
+        status: "lost", result_checked_at: now(), result_source: "demo" });
+      addTask(d, "bid_result", b.id, b.title, `개찰 결과: 미낙찰 · 우리 ${b.our_rank}위 / ${b.participants}개사 · 1순위 투찰률 ${b.winner_rate}% (데모 예시 결과)`);
+      updated++;
+    });
+    save(d);
+    return { updated, message: updated ? `개찰 결과 ${updated}건 반영 (데모 예시)` : "반영할 개찰 결과가 없습니다." };
+  },
 };
 
 // 비회원 연락처는 관리자 외에는 숨김
@@ -555,6 +597,7 @@ const supa = {
   async listBids() { const c = await client(); return ok(await c.from("bids").select("*").order("close_at", { ascending: true }).limit(300)); },
   async updateBid(id, patch) { const c = await client(); const me = await this.currentUser(); return ok(await c.from("bids").update({ ...patch, updated_by: me.name, updated_at: now() }).eq("id", id).select().single()); },
   async syncBids() { return api("/api/bids-sync", {}, true); },
+  async syncBidResults() { return api("/api/bids-results", {}, true); },
 };
 
 async function api(path, body, auth = false) {

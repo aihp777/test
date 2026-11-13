@@ -442,7 +442,7 @@ async function settings() {
 // =============================================================
 //  공동 업무함 — 김정환 대표이사 · 김종연 사내이사 동시 확인
 // =============================================================
-const TASK_LINK = { guest_inquiry: "requests", request: "requests", vendor_review: "vendors?status=pending", payment: "payments", settle: "payments?settle=ready", refund: "payments", bid: "bids" };
+const TASK_LINK = { guest_inquiry: "requests", request: "requests", vendor_review: "vendors?status=pending", payment: "payments", settle: "payments?settle=ready", refund: "payments", bid: "bids", bid_result: "bids?tab=stats" };
 async function tasksView(params) {
   const { tasks, users } = await loadAll();
   const admins = users.filter((u) => u.role === "admin");
@@ -493,11 +493,14 @@ async function taskDrawer(t) {
 // =============================================================
 const bidEligible = (b) => !b.region_limit || BID.okRegions.some((r) => b.region_limit.includes(r));
 const dDay = (iso) => { if (!iso) return "-"; const d = Math.ceil((new Date(iso) - Date.now()) / 86400e3); return d < 0 ? "마감" : d === 0 ? "D-day" : `D-${d}`; };
+const bidTabs = (on) => `<div class="tabs" id="bt"><button data-t="" class="${on === "list" ? "on" : ""}">공고 관리</button><button data-t="stats" class="${on === "stats" ? "on" : ""}">입찰 통계 · 결과 분석</button></div>`;
+const bindBidTabs = () => $$("#bt button").forEach((b) => (b.onclick = () => (location.hash = "bids" + (b.dataset.t ? "?tab=" + b.dataset.t : ""))));
 async function bidsView(params) {
+  if (params.get("tab") === "stats") return bidStatsView();
   const { bids } = await loadAll();
   const st = params.get("status") || "";
   const soon = bids.filter((b) => b.close_at && new Date(b.close_at) - Date.now() < 3 * 86400e3 && new Date(b.close_at) > Date.now() && !["skip", "submitted", "won", "lost"].includes(b.status));
-  $("#main").innerHTML = `
+  $("#main").innerHTML = `${bidTabs("list")}
     <div class="notice warn" style="margin-top:0"><b>투찰(입찰서 제출)은 자동화하지 않습니다.</b>나라장터 전자입찰은 공동인증서 등 본인 확인 절차가 필요합니다.
       이 화면은 <strong>공고 자동 수집(매일 07시) → 자격 확인 → 두 분께 동시 알림 → 검토·참여 결정 → 투찰가 산정 보조 → 결과 기록</strong>을 지원하고, 투찰은 담당자가 나라장터에서 직접 진행합니다.</div>
     <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
@@ -511,6 +514,7 @@ async function bidsView(params) {
       <select id="el"><option value="">전체 지역</option><option value="ok">참가 가능 (전국·${esc(BID.homeRegion)})</option><option value="no">지역제한 확인 필요</option></select>
       <input type="search" id="q" placeholder="공고명·기관 검색"><span class="sp"></span><span class="count" id="count"></span>
       <button class="p-btn p-btn-navy p-btn-sm" id="sync">지금 수집</button>
+      <button class="p-btn p-btn-sm" id="syncRes" title="투찰 완료 + 개찰일 지난 공고의 결과를 가져옵니다">개찰 결과 확인</button>
       <button class="p-btn p-btn-line p-btn-sm" id="csv">CSV</button>
     </div>
     <div class="a-wrap"><table class="a-tbl"><thead><tr><th>공고명</th><th>공고기관</th><th>지역제한</th><th class="num">기초금액</th><th>마감</th><th>상태</th><th>담당</th></tr></thead><tbody id="tb"></tbody></table></div>`;
@@ -530,6 +534,8 @@ async function bidsView(params) {
     $$("#tb tr.click").forEach((tr) => (tr.onclick = () => bidDrawer(bids.find((b) => b.id === tr.dataset.id))));
   };
   ["st", "el"].forEach((id) => ($("#" + id).onchange = draw)); $("#q").oninput = draw; draw();
+  bindBidTabs();
+  $("#syncRes").onclick = async (e) => { e.target.disabled = true; try { const r = await store.syncBidResults(); toast(r.message); route(); } catch (err) { toast(err.message, "bad"); e.target.disabled = false; } };
   $("#sync").onclick = async (e) => { e.target.disabled = true; try { const r = await store.syncBids(); toast(r.message || `새 공고 ${r.added}건 (조회 ${r.fetched}건)`); route(); } catch (err) { toast(err.message, "bad"); e.target.disabled = false; } };
   $("#csv").onclick = () => csv("나라장터입찰", ["공고번호", "차수", "공고명", "공고기관", "수요기관", "지역제한", "기초금액", "마감", "개찰", "상태", "담당", "투찰예정가", "메모"],
     rows.map((b) => [b.bid_no, b.bid_ord, b.title, b.org, b.demand_org, b.region_limit || "전국", b.base_amount, datetime(b.close_at), datetime(b.open_at), BID_STATUS[b.status], b.assignee, b.my_amount, b.memo]));
@@ -542,6 +548,20 @@ function bidDrawer(b) {
       <dt>참가제한지역</dt><dd>${esc(b.region_limit || "없음(전국)")}</dd><dt>기초금액</dt><dd>${b.base_amount ? won(b.base_amount) : "-"}</dd><dt>추정가격</dt><dd>${b.presumed_price ? won(b.presumed_price) : "-"}</dd>
       <dt>입찰마감</dt><dd>${datetime(b.close_at)}</dd><dt>개찰</dt><dd>${datetime(b.open_at)}</dd>${b.updated_by ? `<dt>최근 수정</dt><dd>${esc(b.updated_by)} · ${datetime(b.updated_at)}</dd>` : ""}</dl>
     <p class="mt"><a class="p-btn p-btn-line p-btn-sm" href="${esc(b.url || "https://www.g2b.go.kr")}" target="_blank" rel="noopener">나라장터 공고 원문 열기 ↗</a></p>
+    <h4>🏁 개찰 결과 ${b.result_checked_at ? `<span class="muted" style="font-weight:500;font-size:12px">${b.result_source === "nara" ? "나라장터 자동 반영" : b.result_source === "demo" ? "데모 예시" : "수기 입력"} · ${datetime(b.result_checked_at)}</span>` : ""}</h4>
+    ${b.result_checked_at ? `<dl class="kv">
+        <dt>결과</dt><dd>${badge(BID_STATUS[b.status], b.status === "won" ? "ok" : "")} ${b.our_rank ? `우리 <b>${b.our_rank}위</b>` : ""} ${b.participants ? `/ ${b.participants}개사 참여` : ""}</dd>
+        <dt>1순위 업체</dt><dd>${esc(b.winner_name || "-")}</dd>
+        <dt>1순위 금액·투찰률</dt><dd>${b.winner_amount ? won(b.winner_amount) : "-"} · ${b.winner_rate ?? "-"}%</dd>
+        <dt>우리 투찰가·투찰률</dt><dd>${b.my_amount ? won(b.my_amount) : "-"} · ${b.our_rate ?? "-"}%</dd>
+        ${b.our_rate && b.winner_rate ? `<dt>1순위와 차이</dt><dd><b>${(b.our_rate - b.winner_rate >= 0 ? "+" : "") + (b.our_rate - b.winner_rate).toFixed(3)}%p</b> ${b.our_rate - b.winner_rate > 0 ? "(우리가 높게 투찰)" : b.our_rate - b.winner_rate < 0 ? "(우리가 낮게 투찰)" : ""}</dd>` : ""}
+      </dl><p class="muted" style="font-size:12px">적격심사 공고는 1순위가 심사에서 탈락할 수 있으므로 최종 낙찰자는 나라장터에서 확인하세요.</p>`
+    : b.status === "submitted" ? `<p class="muted" style="font-size:13.5px">개찰 후 매일 18시 자동 확인되며, 목록의 '개찰 결과 확인' 버튼으로 바로 가져올 수 있습니다. API 연결 전에는 아래에 직접 입력하세요.</p>` : `<p class="muted" style="font-size:13.5px">투찰 완료 후 개찰 결과가 반영됩니다.</p>`}
+    ${["submitted", "won", "lost"].includes(b.status) ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:13.5px;color:var(--blue)">결과 직접 입력/수정</summary>
+      <div class="row2 mt"><div class="field"><label>참가업체 수</label><input type="number" id="rN" value="${b.participants ?? ""}"></div><div class="field"><label>우리 순위</label><input type="number" id="rRank" value="${b.our_rank ?? ""}"></div></div>
+      <div class="row2"><div class="field"><label>1순위 업체명</label><input id="rWin" value="${esc(b.winner_name || "")}"></div><div class="field"><label>1순위 투찰금액 (원)</label><input type="number" id="rWinAmt" value="${b.winner_amount ?? ""}"></div></div>
+      <div class="row2"><div class="field"><label>1순위 투찰률 (%)</label><input type="number" step="0.001" id="rWinRate" value="${b.winner_rate ?? ""}"></div><div class="field"><label>우리 투찰률 (%)</label><input type="number" step="0.001" id="rOurRate" value="${b.our_rate ?? ""}"></div></div>
+      <button class="p-btn p-btn-sm" id="rSave" type="button">결과 저장</button></details>` : ""}
     <h4>참가 전 확인</h4>
     <ul style="font-size:13.5px;margin-left:18px;line-height:1.9"><li>입찰참가자격 등록 업종(경비업 허가 업무)과 공고의 업종 제한 일치 여부</li><li>지역제한, 실적·신용평가 등 적격심사 기준</li><li>낙찰하한율·예정가격 결정 방식(복수예비가격), 현장설명회 여부</li><li>공동인증서·전자입찰 준비, 투찰 마감 시각</li></ul>
     <h4>투찰가 산정 보조 (참고용)</h4>
@@ -561,10 +581,63 @@ function bidDrawer(b) {
     $("#calc").innerHTML = rows.join("") + `<p class="muted" style="font-size:12px">예정가격은 복수예비가격 추첨으로 결정되므로 실제와 다를 수 있습니다. 최종 투찰가는 공고문과 내부 원가를 기준으로 결정하세요.</p>`;
   };
   $("#cBase").oninput = calc; $("#cRate").oninput = calc;
+  const rs = $("#rSave");
+  if (rs) rs.onclick = async () => {
+    const n = (id) => ($("#" + id).value === "" ? null : +$("#" + id).value);
+    const rank = n("rRank");
+    await store.updateBid(b.id, { participants: n("rN"), our_rank: rank, winner_name: $("#rWin").value || null, winner_amount: n("rWinAmt"), winner_rate: n("rWinRate"), our_rate: n("rOurRate"),
+      status: rank === 1 ? "won" : rank ? "lost" : b.status, result_checked_at: new Date().toISOString(), result_source: "manual" });
+    toast("개찰 결과를 저장했습니다."); closeDrawer(); route();
+  };
   $("#bSave").onclick = async () => {
     await store.updateBid(b.id, { status: $("#bSt").value, assignee: $("#bAs").value || null, my_amount: +$("#bAmt").value || null, memo: $("#bMemo").value });
     toast("저장되었습니다."); closeDrawer(); route();
   };
+}
+
+// ---------- 입찰 통계 · 결과 분석 ----------
+async function bidStatsView() {
+  const { bids } = await loadAll();
+  const joined = bids.filter((b) => ["submitted", "won", "lost"].includes(b.status));
+  const decided = joined.filter((b) => ["won", "lost"].includes(b.status));
+  const wonB = decided.filter((b) => b.status === "won");
+  const winRate = decided.length ? Math.round((wonB.length / decided.length) * 100) : 0;
+  const withRates = decided.filter((b) => b.our_rate && b.winner_rate);
+  const lostWithRates = withRates.filter((b) => b.status === "lost");
+  const avgGap = lostWithRates.length ? sum(lostWithRates, (b) => b.our_rate - b.winner_rate) / lostWithRates.length : null;
+  const avgN = decided.filter((b) => b.participants).length ? Math.round(sum(decided, (b) => b.participants) / decided.filter((b) => b.participants).length) : null;
+  const months = [...Array(6)].map((_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (5 - i)); return d.toISOString().slice(0, 7); });
+  const wonByMonth = Object.fromEntries(months.map((m) => [m, sum(wonB.filter((b) => (b.open_at || "").slice(0, 7) === m), (b) => b.winner_amount || b.my_amount)]));
+  const byKw = {}; decided.forEach((b) => { const k = b.keyword || "기타"; byKw[k] = byKw[k] || { n: 0, w: 0, amt: 0 }; byKw[k].n++; if (b.status === "won") { byKw[k].w++; byKw[k].amt += b.winner_amount || 0; } });
+
+  $("#main").innerHTML = `${bidTabs("stats")}
+    ${IS_DEMO ? `<div class="demo-note">데모 모드: 아래 입찰 이력과 결과는 화면 확인용 예시입니다.</div>` : ""}
+    <div class="kpis">
+      <div class="kpi"><span>투찰 참여</span><b>${joined.length}건</b><small>결과 대기 ${joined.length - decided.length}건</small></div>
+      <div class="kpi"><span>낙찰</span><b>${wonB.length}건</b><small>미낙찰 ${decided.length - wonB.length}건</small></div>
+      <div class="kpi"><span>낙찰률</span><b>${winRate}%</b><small>결과 확정 ${decided.length}건 기준</small></div>
+      <div class="kpi"><span>누적 낙찰금액</span><b>${won(sum(wonB, (b) => b.winner_amount || b.my_amount))}</b><small>평균 참가 ${avgN ?? "-"}개사</small></div>
+      <div class="kpi"><span>미낙찰 시 1순위와 차이</span><b>${avgGap === null ? "-" : (avgGap >= 0 ? "+" : "") + avgGap.toFixed(3) + "%p"}</b><small>${avgGap === null ? "데이터 부족" : avgGap > 0 ? "평균적으로 높게 투찰" : "평균적으로 낮게 투찰"}</small></div>
+    </div>
+    <div class="cols c2">
+      <div class="panel"><h3>월별 낙찰금액</h3><p class="sub">최근 6개월 · 개찰일 기준</p>
+        ${colChart(months.map((m) => ({ label: +m.slice(5) + "월", value: wonByMonth[m], tip: `<b>${m.replace("-", "년 ")}월</b>${won(wonByMonth[m])}` })))}</div>
+      <div class="panel"><h3>키워드별 성과</h3><p class="sub">결과 확정 공고 기준</p>
+        <table class="a-tbl"><thead><tr><th>키워드</th><th class="num">참여</th><th class="num">낙찰</th><th class="num">낙찰률</th></tr></thead><tbody>
+        ${Object.entries(byKw).sort((a, c) => c[1].n - a[1].n).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num">${v.w}</td><td class="num">${Math.round((v.w / v.n) * 100)}%</td></tr>`).join("") || `<tr><td colspan="4" class="empty">데이터가 없습니다.</td></tr>`}
+        </tbody></table></div>
+    </div>
+    <div class="panel"><h3>투찰률 비교</h3><p class="sub">우리 투찰률과 1순위 투찰률의 차이 — 다음 투찰 시 사정률·투찰률 판단에 참고</p>
+      <div class="a-wrap" style="border:0"><table class="a-tbl"><thead><tr><th>개찰일</th><th>공고명</th><th>결과</th><th class="num">순위/참가</th><th class="num">우리 투찰률</th><th class="num">1순위 투찰률</th><th class="num">차이</th></tr></thead><tbody>
+      ${decided.sort((a, c) => (a.open_at < c.open_at ? 1 : -1)).map((b) => { const g = b.our_rate && b.winner_rate ? b.our_rate - b.winner_rate : null; return `<tr class="click" data-id="${b.id}">
+        <td class="sm">${date(b.open_at)}</td><td>${esc(b.title)}</td><td>${badge(BID_STATUS[b.status], b.status === "won" ? "ok" : "")}</td>
+        <td class="num">${b.our_rank ?? "-"} / ${b.participants ?? "-"}</td><td class="num">${b.our_rate ?? "-"}%</td><td class="num">${b.winner_rate ?? "-"}%</td>
+        <td class="num">${g === null ? "-" : `<b style="color:${g > 0 ? "var(--bad)" : "inherit"}">${(g >= 0 ? "+" : "") + g.toFixed(3)}%p</b>`}</td></tr>`; }).join("") || `<tr><td colspan="7" class="empty">결과가 확정된 입찰이 없습니다.</td></tr>`}
+      </tbody></table></div>
+      <p class="muted" style="font-size:12px;margin-top:8px">차이가 +이면 1순위보다 높게 투찰한 것입니다. 예정가격은 복수예비가격 추첨으로 정해지므로 통계는 참고용입니다.</p>
+    </div>`;
+  bindBidTabs(); bindTips($("#main"));
+  $$("#main tr.click").forEach((tr) => (tr.onclick = () => bidDrawer(bids.find((b) => b.id === tr.dataset.id))));
 }
 
 // ---------- 라우터 ----------

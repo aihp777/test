@@ -160,3 +160,10 @@ Vercel 프로젝트 → **Settings → Domains**에서 회사 도메인을 추�
 
 ### Supabase 웹훅 (문자 알림 연결)
 Database → Webhooks → Create: Table `admin_tasks`, Events `INSERT`, Method `POST`, URL `https://<도메인>/api/notify`, Header `x-webhook-secret: <NOTIFY_SECRET 값>`
+
+### 나라장터 2단계: 개찰 결과 자동 반영 · 입찰 통계
+- **개찰 결과 자동 반영** (`api/bids-results.js`, 매일 18:00 KST + 콘솔 '개찰 결과 확인' 버튼): 투찰 완료 + 개찰일 경과 공고를 낙찰정보서비스(데이터 ID 15129397, 활용신청 필요)로 조회 → 우리 순위·투찰률, 1순위 업체·금액·투찰률, 참가업체 수 저장 → 1순위면 '낙찰', 아니면 '미낙찰' → 공동 업무함 + 2인 문자 알림
+- API 연결 전에는 공고 상세에서 **결과 직접 입력** 가능
+- **입찰 통계 · 결과 분석** 탭(`/admin#bids?tab=stats`): 투찰 참여·낙찰 건수, 낙찰률, 누적 낙찰금액, 월별 낙찰금액, 키워드별 성과, 우리 vs 1순위 투찰률 차이
+- 적격심사 공고는 1순위가 탈락할 수 있으므로 '1순위 개찰 기준' 결과 — 최종 낙찰자는 나라장터에서 확인
+- 추가 환경변수: `COMPANY_BIZ_NO`(우리 사업자등록번호, 결과에서 우리 순위 찾기), (선택) `NARA_RESULT_BASE`, `NARA_RESULT_OP`(기본 `getOpengResultListInfoOpengCompt` — 활용신청 후 명세서로 확인)
